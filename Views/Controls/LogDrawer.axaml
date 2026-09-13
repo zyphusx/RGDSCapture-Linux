@@ -1,0 +1,113 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:RGDSCapture.ViewModels"
+             x:Class="RGDSCapture.Views.Controls.LogDrawer"
+             x:DataType="vm:MainViewModel">
+
+    <!-- DataContext: MainViewModel. Slides in over the video stage from
+         the right edge, so it never resizes the picture underneath. -->
+
+    <UserControl.Styles>
+        <!-- The slide is a transition on RenderTransform rather than a pair
+             of storyboards: Avalonia animates by interpolating between the
+             values a selector resolves, so "open" and "closed" are two
+             states and the easing belongs to the transition between them.
+             The drawer parks fully off its own width plus the 1px border. -->
+        <Style Selector="Border#Drawer">
+            <Setter Property="RenderTransform" Value="translateX(321px)"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <TransformOperationsTransition Property="RenderTransform"
+                                                   Duration="0:0:0.2"
+                                                   Easing="CubicEaseIn"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border#Drawer.open">
+            <Setter Property="RenderTransform" Value="translateX(0px)"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <TransformOperationsTransition Property="RenderTransform"
+                                                   Duration="0:0:0.2"
+                                                   Easing="CubicEaseOut"/>
+                </Transitions>
+            </Setter>
+        </Style>
+
+        <Style Selector="TextBlock.log-line">
+            <Setter Property="Foreground" Value="{DynamicResource LogFg}"/>
+        </Style>
+        <Style Selector="TextBlock.log-line.error">
+            <Setter Property="Foreground" Value="{DynamicResource LogErrorFg}"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Border Name="Drawer"
+            Width="320"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Stretch"
+            Background="{DynamicResource SurfaceBg}"
+            BorderBrush="{DynamicResource BorderStrong}"
+            BorderThickness="1,0,0,0"
+            BoxShadow="0 0 24 #66000000"
+            ZIndex="10"
+            AutomationProperties.Name="Event log drawer">
+
+        <DockPanel>
+            <Border DockPanel.Dock="Top"
+                    Background="{DynamicResource SurfaceRaisedBg}"
+                    BorderBrush="{DynamicResource BorderSubtle}"
+                    BorderThickness="0,0,0,1"
+                    Padding="14,10">
+                <DockPanel>
+                    <Button DockPanel.Dock="Right"
+                            Classes="ghost icon"
+                            Content="✕"
+                            Command="{Binding Log.ToggleCommand}"
+                            AutomationProperties.Name="Close log"
+                            ToolTip.Tip="Close the log  (F8)"/>
+                    <TextBlock Text="EVENT LOG"
+                               Classes="section-header"
+                               Margin="0"
+                               VerticalAlignment="Center"/>
+                </DockPanel>
+            </Border>
+
+            <Border DockPanel.Dock="Bottom"
+                    Background="{DynamicResource SurfaceRaisedBg}"
+                    BorderBrush="{DynamicResource BorderSubtle}"
+                    BorderThickness="0,1,0,0"
+                    Padding="10">
+                <Button Content="Clear Log"
+                        HorizontalAlignment="Stretch"
+                        FontSize="12"
+                        Command="{Binding Log.ClearCommand}"
+                        AutomationProperties.Name="Clear event log"/>
+            </Border>
+
+            <ScrollViewer Name="LogScroll"
+                          Background="{DynamicResource LogBg}"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled"
+                          Padding="12,8">
+                <ItemsControl ItemsSource="{Binding Log.Entries}"
+                              AutomationProperties.Name="Event log output">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:LogEntry">
+                            <TextBlock Classes="log-line"
+                                       Classes.error="{Binding IsError}"
+                                       TextWrapping="Wrap"
+                                       FontFamily="Cascadia Code,Consolas,monospace"
+                                       FontSize="11"
+                                       LineHeight="16"
+                                       Margin="0,1">
+                                <Run Text="{Binding Timestamp, Mode=OneWay}"
+                                     Foreground="{DynamicResource LogTimestampFg}"/><Run Text="  "/><Run Text="{Binding Message, Mode=OneWay}"/>
+                            </TextBlock>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </DockPanel>
+    </Border>
+</UserControl>
