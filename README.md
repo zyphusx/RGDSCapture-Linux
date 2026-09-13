@@ -84,7 +84,7 @@ dotnet run                      # needs .NET 10; uses the system FFmpeg 8.x
 | **FFmpeg** | 8.x — what Nobara ships, so nothing extra to install |
 | **Audio** | PipeWire or PulseAudio |
 | **Keyring** | Any Secret Service provider, for "remember credentials" |
-| **Display** | Wayland or X11 |
+| **Display** | X11, or Wayland via XWayland |
 
 ### Why FFmpeg 8 specifically
 
@@ -148,7 +148,7 @@ The Flatpak asks for what it needs and nothing more:
 | `--talk-name=org.freedesktop.secrets` | Saved SSH password |
 | `--filesystem=xdg-videos` | Recordings and replays |
 | `--filesystem=xdg-pictures` | Screenshots |
-| `--socket=wayland` / `--socket=fallback-x11` / `--device=dri` | Display |
+| `--socket=x11` + `--share=ipc` + `--device=dri` | Display. X11 rather than Wayland because Avalonia 11 is X11-only; under a Wayland session it runs through XWayland |
 
 No access to your home directory beyond those two media folders.
 

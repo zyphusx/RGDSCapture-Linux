@@ -24,9 +24,22 @@ sdk: org.freedesktop.Sdk
 command: rgdscapture
 
 finish-args:
-  # Display. Wayland where available, X11 otherwise.
-  - --socket=wayland
-  - --socket=fallback-x11
+  # Display. X11 unconditionally, including under Wayland via XWayland.
+  #
+  # Not fallback-x11, which is the obvious-looking choice and is wrong here:
+  # it grants X11 only when Wayland is absent. Avalonia 11 has no Wayland
+  # backend — it is X11-only and relies on XWayland — so on a Wayland session
+  # fallback-x11 withholds the one socket the toolkit can actually use, and
+  # startup dies with "XOpenDisplay failed".
+  #
+  # --socket=wayland is deliberately absent for the same reason: requesting a
+  # display server the toolkit cannot talk to is noise, and pairing it with
+  # fallback-x11 is what caused the failure. Add both back if Avalonia gains
+  # a Wayland backend.
+  #
+  # ipc is what lets X11 shared memory work; without it rendering falls back
+  # to pushing every frame over the socket, which this app would feel.
+  - --socket=x11
   - --share=ipc
   - --device=dri
 
