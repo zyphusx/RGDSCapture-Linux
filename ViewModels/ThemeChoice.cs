@@ -9,7 +9,7 @@ namespace RGDSCapture.ViewModels
     /// One entry in the theme picker: the preset plus the few swatch brushes
     /// the tile needs to preview it without applying it.
     /// </summary>
-    public sealed class ThemeChoice : ObservableObject
+    public sealed class ThemeChoice : ObservableObject, IMenuChoice
     {
         private readonly Func<ThemePreset, bool> _isActive;
 

@@ -20,6 +20,7 @@
          compile time; treat those as errors so a renamed view-model property
          fails the build instead of silently blanking a control at runtime. -->
     <AvaloniaNameGeneratorIsEnabled>true</AvaloniaNameGeneratorIsEnabled>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <TrimMode>copyused</TrimMode>
     <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
     <InvariantGlobalization>true</InvariantGlobalization>

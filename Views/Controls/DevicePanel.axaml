@@ -1,6 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:RGDSCapture.ViewModels"
+             xmlns:core="using:RGDSCapture.Core"
+             xmlns:ac="using:Avalonia.Controls"
              x:Class="RGDSCapture.Views.Controls.DevicePanel"
              x:DataType="vm:MainViewModel">
 
@@ -23,13 +25,18 @@
 
                     <TextBlock Text="Device" Classes="field-label"/>
                     <ComboBox IsEnabled="{Binding IsDisconnected}"
-                              SelectedValueBinding="{Binding Tag}"
+                              SelectedValueBinding="{Binding Tag, DataType=ac:ComboBoxItem}"
                               SelectedValue="{Binding DeviceType}"
                               Margin="0,0,0,10"
                               AutomationProperties.Name="Device type"
                               ToolTip.Tip="Which Anbernic device this is">
-                        <ComboBoxItem Content="RG DS (dual-screen)" Tag="RgDualScreen"/>
-                        <ComboBoxItem Content="RG353V (single-screen)" Tag="Rg353V"/>
+                        <!-- Tagged with the enum value, not its name: WPF's
+                             binding engine coerces a string to an enum on the
+                             way through, Avalonia's does not. -->
+                        <ComboBoxItem Content="RG DS (dual-screen)"
+                                      Tag="{x:Static core:DeviceType.RgDualScreen}"/>
+                        <ComboBoxItem Content="RG353V (single-screen)"
+                                      Tag="{x:Static core:DeviceType.Rg353V}"/>
                     </ComboBox>
 
                     <Grid Margin="0,0,0,12">

@@ -8,7 +8,7 @@ namespace RGDSCapture.ViewModels
     /// a factor set from the menu, a shortcut or settings keeps every entry
     /// in sync.
     /// </summary>
-    public sealed class UiScaleChoice : ObservableObject
+    public sealed class UiScaleChoice : ObservableObject, IMenuChoice
     {
         public UiScaleChoice(double scale, RelayCommand apply)
         {
