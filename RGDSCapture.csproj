@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- FFmpeg.AutoGen's decode path works through raw pointers. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <AssemblyName>rgdscapture</AssemblyName>
+    <RootNamespace>RGDSCapture</RootNamespace>
+    <AssemblyVersion>3.2.0.0</AssemblyVersion>
+    <FileVersion>3.2.0.0</FileVersion>
+    <Version>3.2.0</Version>
+
+    <!-- Avalonia raises a diagnostic for XAML bindings it cannot resolve at
+         compile time; treat those as errors so a renamed view-model property
+         fails the build instead of silently blanking a control at runtime. -->
+    <AvaloniaNameGeneratorIsEnabled>true</AvaloniaNameGeneratorIsEnabled>
+    <TrimMode>copyused</TrimMode>
+    <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- UI -->
+    <PackageReference Include="Avalonia" Version="11.3.7" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.7" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.7" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.7" />
+
+    <!-- FFmpeg bindings. The native libraries are NOT shipped: on Linux they
+         come from the host (or, in the Flatpak, from a bundled LGPL FFmpeg
+         built by the manifest). See Services/FFmpegLoader.cs. -->
+    <PackageReference Include="FFmpeg.AutoGen" Version="9.0.1.1" />
+
+    <!-- SSH -->
+    <PackageReference Include="SSH.NET" Version="2026.0.0" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+    <PackageReference Include="Avalonia.Diagnostics" Version="11.3.7" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+</Project>

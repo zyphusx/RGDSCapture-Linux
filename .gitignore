@@ -1,0 +1,16 @@
+# Build output
+bin/
+obj/
+publish/
+*.user
+
+# Flatpak build artefacts
+.flatpak-builder/
+build-dir/
+repo/
+*.flatpak
+
+# Editor
+.vs/
+.idea/
+*.swp
