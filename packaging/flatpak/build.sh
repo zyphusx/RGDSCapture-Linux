@@ -34,6 +34,30 @@ need() {
 need dotnet
 need flatpak
 need flatpak-builder
+need curl
+need sha256sum
+
+# ── FFmpeg tarball checksum ───────────────────────────────────────────
+# The manifest ships with a placeholder, because the machine the Linux
+# port was written on could not reach ffmpeg.org and a guessed checksum
+# fails the build looking like corruption. Fill it in on first run.
+MANIFEST="$HERE/$APP_ID.yml"
+PLACEHOLDER="0000000000000000000000000000000000000000000000000000000000000000"
+
+if grep -q "sha256: $PLACEHOLDER" "$MANIFEST"; then
+    FFMPEG_URL="$(grep -oP 'url: \K\S+ffmpeg-[0-9.]+\.tar\.xz' "$MANIFEST")"
+    echo "==> Fetching the FFmpeg checksum (one time)"
+    echo "    $FFMPEG_URL"
+
+    TARBALL="$(mktemp -d)/$(basename "$FFMPEG_URL")"
+    curl --fail --location --progress-bar --output "$TARBALL" "$FFMPEG_URL"
+    SUM="$(sha256sum "$TARBALL" | cut -d" " -f1)"
+    rm -rf "$(dirname "$TARBALL")"
+
+    sed -i "s|sha256: $PLACEHOLDER|sha256: $SUM|" "$MANIFEST"
+    echo "    -> $SUM"
+    echo "    written into the manifest; commit it so this only happens once."
+fi
 
 echo "==> Installing the Flatpak runtime and SDK"
 flatpak install --user --noninteractive --or-update flathub \

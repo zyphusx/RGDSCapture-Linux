@@ -53,17 +53,19 @@ flatpak run io.github.zyphusx.RGDSCapture
 `build.sh --bundle` also writes a single-file `.flatpak` you can hand to
 someone else.
 
-> **One value needs filling in before the first build.** The manifest builds
-> FFmpeg 9.0.1 from source and the `sha256` for that tarball is a placeholder
-> — the machine this port was written on could not reach `ffmpeg.org`, and a
-> guessed checksum is worse than an obvious gap. Get the real one:
->
-> ```bash
-> curl -O https://ffmpeg.org/releases/ffmpeg-9.0.1.tar.xz
-> sha256sum ffmpeg-9.0.1.tar.xz
-> ```
->
-> then paste it into `packaging/flatpak/io.github.zyphusx.RGDSCapture.yml`.
+The first run fetches the FFmpeg tarball's `sha256` and writes it into the
+manifest — it ships as a placeholder because the machine this port was written
+on could not reach `ffmpeg.org`, and a guessed checksum fails the build
+looking like corruption. Commit the value it fills in and it never happens
+again.
+
+**Prerequisites:** `flatpak`, `flatpak-builder` and the .NET 10 SDK.
+
+```bash
+sudo dnf install flatpak flatpak-builder dotnet-sdk-10.0
+```
+
+Expect the first build to take a while — it compiles FFmpeg from source.
 
 ### Running from source
 
