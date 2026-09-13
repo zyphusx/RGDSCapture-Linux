@@ -63,7 +63,7 @@
             <!-- Health + FPS + optional network stats, top-left -->
             <StackPanel HorizontalAlignment="Left"
                         VerticalAlignment="Top"
-                        Margin="10"
+                        Margin="8"
                         IsHitTestVisible="False">
 
                 <Border Classes="glass-chip" HorizontalAlignment="Left">
@@ -84,19 +84,19 @@
 
                 <Border Classes="glass-chip"
                         HorizontalAlignment="Left"
-                        Margin="0,6,0,0"
+                        Margin="0,4,0,0"
                         IsVisible="{Binding StatsText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                     <TextBlock Text="{Binding StatsText}"
                                Foreground="#DDFFFFFF"
                                FontSize="11"
-                               FontFamily="Cascadia Code,Consolas,monospace"
+                               Classes="numeric"
                                AutomationProperties.Name="Network stats"/>
                 </Border>
             </StackPanel>
 
             <!-- Recording indicator, top-right beneath the fullscreen button -->
             <Border Classes="glass-chip"
-                    Margin="0,46,10,0"
+                    Margin="0,52,12,0"
                     HorizontalAlignment="Right"
                     VerticalAlignment="Top"
                     ZIndex="5"
@@ -106,7 +106,7 @@
                            Foreground="{DynamicResource DangerFgSolid}"
                            FontSize="11"
                            FontWeight="Bold"
-                           FontFamily="Cascadia Code,Consolas,monospace"
+                           Classes="numeric"
                            AutomationProperties.Name="Recording indicator"/>
             </Border>
 
@@ -116,7 +116,7 @@
                     Content="⛶"
                     HorizontalAlignment="Right"
                     VerticalAlignment="Top"
-                    Margin="0,10,10,0"
+                    Margin="0,8,8,0"
                     ZIndex="5"
                     AutomationProperties.Name="Full screen"
                     ToolTip.Tip="{Binding DisplayName, StringFormat='Full screen — {0}'}"/>

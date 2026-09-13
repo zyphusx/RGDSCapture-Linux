@@ -13,8 +13,6 @@
         TransparencyLevelHint="Transparent"
         ShowInTaskbar="False"
         Background="Transparent"
-        FontFamily="Inter,Cantarell,Noto Sans,sans-serif"
-        FontSize="13"
         UseLayoutRounding="True">
 
     <Window.Styles>
@@ -95,18 +93,18 @@
                     <Border Classes="tile-caption"
                             Classes.active="{Binding IsActive}"
                             CornerRadius="0,0,6,6"
-                            Padding="8,6">
+                            Padding="8,8">
                         <DockPanel LastChildFill="False">
                             <TextBlock DockPanel.Dock="Left"
                                        Classes="tile-name"
                                        Classes.active="{Binding IsActive}"
                                        Text="{Binding Name}"
-                                       FontSize="12"
+                                       FontSize="13"
                                        TextTrimming="CharacterEllipsis"
                                        VerticalAlignment="Center"/>
                             <TextBlock DockPanel.Dock="Right"
                                        Text="✓"
-                                       FontSize="12"
+                                       FontSize="13"
                                        FontWeight="Bold"
                                        VerticalAlignment="Center"
                                        Margin="8,0,0,0"
@@ -133,18 +131,18 @@
                  scroller is what keeps Apply / Done reachable. -->
             <ScrollViewer VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
-                <StackPanel Margin="22">
+                <StackPanel Margin="20">
 
                     <!-- Header doubles as the drag handle -->
-                    <Border Name="DragHandle" Background="Transparent" Margin="0,0,0,18">
+                    <Border Name="DragHandle" Background="Transparent" Margin="0,0,0,16">
                         <DockPanel LastChildFill="False">
                             <StackPanel DockPanel.Dock="Left">
                                 <TextBlock Text="Theme"
                                            Foreground="{DynamicResource TextPrimary}"
-                                           FontSize="16" FontWeight="SemiBold"/>
+                                           FontSize="15" FontWeight="SemiBold"/>
                                 <TextBlock Text="Pick a preset, or set your own accent colour."
                                            Foreground="{DynamicResource TextSecondary}"
-                                           FontSize="12" Margin="0,4,0,0"/>
+                                           FontSize="13" Margin="0,4,0,0"/>
                             </StackPanel>
                             <Button Name="BtnCloseHeader"
                                     DockPanel.Dock="Right"
@@ -167,7 +165,7 @@
                         </ItemsControl>
                     </ScrollViewer>
 
-                    <TextBlock Text="LIGHT" Classes="section-header" Margin="0,8,0,10"/>
+                    <TextBlock Text="LIGHT" Classes="section-header" Margin="0,8,0,8"/>
                     <ScrollViewer Name="ShelfLight" Classes="tile-shelf">
                         <ItemsControl ItemsSource="{Binding LightThemes}"
                                       ItemTemplate="{StaticResource ThemeTileTemplate}">
@@ -179,7 +177,7 @@
                         </ItemsControl>
                     </ScrollViewer>
 
-                    <TextBlock Text="PRIDE" Classes="section-header" Margin="0,8,0,10"/>
+                    <TextBlock Text="PRIDE" Classes="section-header" Margin="0,8,0,8"/>
                     <ScrollViewer Name="ShelfPride" Classes="tile-shelf">
                         <ItemsControl ItemsSource="{Binding PrideThemes}"
                                       ItemTemplate="{StaticResource ThemeTileTemplate}">
@@ -235,14 +233,14 @@
                                     BorderThickness="1"
                                     Margin="0,0,0,8"/>
                             <TextBox Name="TxtHex"
-                                     FontFamily="Cascadia Code,Consolas,monospace"
+                                     Classes="numeric"
                                      TextAlignment="Center"
                                      AutomationProperties.Name="Accent hex value"
                                      ToolTip.Tip="Type a #RRGGBB value and press Enter"/>
                         </StackPanel>
                     </Grid>
 
-                    <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
+                    <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
                         <Button Name="BtnApplyAccent"
                                 Content="Apply Accent"
                                 Classes="primary"

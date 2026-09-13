@@ -7,29 +7,61 @@
          All colors come from the active theme dictionary via
          DynamicResource, so swapping themes restyles everything live.
 
-         Geometry rhythm:  radius 8 cards / 6 controls / 5 chips
-         Spacing rhythm:   4 · 8 · 12 · 16 · 24
-         Type scale:       13 body · 12 secondary · 11 label/meta
+         ── THE SYSTEM ───────────────────────────────────────────────
 
-         Ported from the WPF Controls.xaml. Two structural differences
-         run through the whole file:
+         Everything below is built from four scales and nothing else. A
+         value that is not on one of them is a mistake, not a nuance.
 
-         Variants are style CLASSES, not keyed styles. WPF picks a look
-         with Style="{StaticResource AccentButton}"; here it is
-         Classes="accent", which also means a control can carry two of
-         them at once.
+           Type      11 · 13 · 15 · 28           four sizes, one family
+           Space     4 · 8 · 12 · 16 · 20 · 24   margins and gaps
+           Radius    12 card · 8 control · 6 chip
+           Height    32 control · 30 chip · 26 segment
 
-         State is expressed as pseudo-class SELECTORS, not triggers.
-         "Button:pointerover /template/ Border#Root" reaches into the
-         template the same way a WPF trigger's TargetName did.
+         Heights come from MinHeight with vertically centred content,
+         never from vertical padding. Padding-driven heights drift the
+         moment two controls carry different font sizes or glyphs, which
+         is exactly how a button, a text box and a picker in the same row
+         ended up three different heights.
 
-         Avalonia's Fluent theme supplies the templates for the controls
-         whose structure we do not actually change (CheckBox, Slider,
-         ScrollBar, Menu); those are restyled rather than re-templated,
-         which is both far less XAML and less to keep in step with the
-         framework. Anything whose shape genuinely differs — segments,
-         chips, caption and overlay buttons — is templated in full.
+         ONE TYPEFACE — Inter, bundled with the app so it renders
+         identically everywhere instead of resolving to whatever the host
+         happens to have. Numeric readouts (the timer, log timestamps,
+         network stats) do not switch to a monospace face: they set the
+         "tnum" OpenType feature, which gives Inter fixed-width digits.
+         Columns line up, a running timer does not jitter, and the app
+         keeps one voice.
+
+         ── PORTING NOTES ────────────────────────────────────────────
+
+         Variants are style CLASSES, not keyed styles, so a control can
+         carry two at once. State is expressed as pseudo-class SELECTORS,
+         where "/template/" reaches into the template the way a WPF
+         trigger's TargetName did.
+
+         Controls whose structure we never changed (CheckBox, Slider,
+         ScrollBar, Menu) are restyled over Fluent's templates rather
+         than re-templated. Anything whose shape genuinely differs is
+         templated in full.
     ════════════════════════════════════════════════════════════════ -->
+
+    <Styles.Resources>
+        <FontFamily x:Key="UiFont">Inter, Cantarell, Noto Sans, sans-serif</FontFamily>
+    </Styles.Resources>
+
+    <!-- Set once, at the window, and inherited. Repeating it per-window
+         is how two of them ended up disagreeing. -->
+    <Style Selector="Window">
+        <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
+        <Setter Property="FontSize" Value="13"/>
+    </Style>
+
+    <!-- Fixed-width digits, for anything that reads as a number. -->
+    <Style Selector="TextBlock.numeric">
+        <Setter Property="FontFeatures" Value="+tnum"/>
+    </Style>
+    <Style Selector="TextBox.numeric">
+        <Setter Property="FontFeatures" Value="+tnum"/>
+    </Style>
 
     <!-- ══════════════════════════════════════════════════════════
          BUTTONS
@@ -41,7 +73,8 @@
         <Setter Property="Foreground" Value="{DynamicResource BtnFg}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource BtnBorder}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="Padding" Value="12,7"/>
+        <Setter Property="Padding" Value="16,0"/>
+        <Setter Property="MinHeight" Value="32"/>
         <Setter Property="FontSize" Value="13"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="HorizontalContentAlignment" Value="Center"/>
@@ -52,7 +85,7 @@
                         Background="{TemplateBinding Background}"
                         BorderBrush="{TemplateBinding BorderBrush}"
                         BorderThickness="{TemplateBinding BorderThickness}"
-                        CornerRadius="6"
+                        CornerRadius="8"
                         Padding="{TemplateBinding Padding}">
                     <ContentPresenter Name="ContentHost"
                                       Content="{TemplateBinding Content}"
@@ -95,9 +128,8 @@
         <Setter Property="Background" Value="{DynamicResource AccentBg}"/>
         <Setter Property="Foreground" Value="{DynamicResource AccentFg}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource AccentGradient}"/>
-        <Setter Property="BorderThickness" Value="2"/>
+        <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="Padding" Value="14,8"/>
     </Style>
     <Style Selector="Button.primary /template/ Border#Root">
         <Setter Property="BoxShadow" Value="{DynamicResource AccentGlow}"/>
@@ -135,9 +167,10 @@
 
     <!-- Icon: a ghost button squared off around a single glyph -->
     <Style Selector="Button.icon">
-        <Setter Property="Padding" Value="7"/>
-        <Setter Property="MinWidth" Value="30"/>
-        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Width" Value="32"/>
+        <Setter Property="MinWidth" Value="32"/>
+        <Setter Property="FontSize" Value="13"/>
     </Style>
 
     <!-- Danger: destructive, but not shouting until hovered -->
@@ -157,7 +190,6 @@
     <!-- Record: the armed state is applied by the view as .recording -->
     <Style Selector="Button.record">
         <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="MinWidth" Value="96"/>
     </Style>
     <Style Selector="Button.record.recording">
         <Setter Property="Background" Value="{DynamicResource RecordingBg}"/>
@@ -188,8 +220,9 @@
         <Setter Property="Background" Value="{DynamicResource OverlayBtnBg}"/>
         <Setter Property="Foreground" Value="{DynamicResource OverlayBtnFg}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource OverlayBtnBorder}"/>
-        <Setter Property="Padding" Value="8,5"/>
-        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Padding" Value="12,0"/>
+        <Setter Property="MinHeight" Value="30"/>
+        <Setter Property="FontSize" Value="13"/>
     </Style>
     <Style Selector="Button.overlay:pointerover /template/ Border#Root">
         <Setter Property="Background" Value="{DynamicResource OverlayBtnHover}"/>
@@ -204,6 +237,7 @@
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="Foreground" Value="{DynamicResource TitleBarFg}"/>
         <Setter Property="Width" Value="46"/>
+        <Setter Property="MinHeight" Value="0"/>
         <Setter Property="Padding" Value="0"/>
         <Setter Property="Focusable" Value="False"/>
         <Setter Property="Template">
@@ -243,14 +277,15 @@
         <Setter Property="Background" Value="{DynamicResource SegmentTrackBg}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource SegmentBorder}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="CornerRadius" Value="7"/>
+        <Setter Property="CornerRadius" Value="8"/>
         <Setter Property="Padding" Value="2"/>
     </Style>
 
     <Style Selector="RadioButton.segment">
         <Setter Property="Foreground" Value="{DynamicResource SegmentFg}"/>
-        <Setter Property="FontSize" Value="12"/>
-        <Setter Property="Padding" Value="8,5"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Padding" Value="8,0"/>
+        <Setter Property="MinHeight" Value="26"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="HorizontalContentAlignment" Value="Center"/>
         <Setter Property="Template">
@@ -259,7 +294,7 @@
                         Background="Transparent"
                         BorderBrush="Transparent"
                         BorderThickness="1"
-                        CornerRadius="5"
+                        CornerRadius="6"
                         Padding="{TemplateBinding Padding}">
                     <ContentPresenter Content="{TemplateBinding Content}"
                                       ContentTemplate="{TemplateBinding ContentTemplate}"
@@ -294,8 +329,9 @@
          re-click genuinely flips the underlying value. -->
     <Style Selector="ToggleButton.chip">
         <Setter Property="Foreground" Value="{DynamicResource SegmentFg}"/>
-        <Setter Property="FontSize" Value="12"/>
-        <Setter Property="Padding" Value="10,6"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Padding" Value="12,0"/>
+        <Setter Property="MinHeight" Value="30"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="HorizontalContentAlignment" Value="Center"/>
         <Setter Property="Template">
@@ -304,7 +340,7 @@
                         Background="{DynamicResource SegmentTrackBg}"
                         BorderBrush="{DynamicResource SegmentBorder}"
                         BorderThickness="1"
-                        CornerRadius="6"
+                        CornerRadius="8"
                         Padding="{TemplateBinding Padding}">
                     <ContentPresenter Content="{TemplateBinding Content}"
                                       ContentTemplate="{TemplateBinding ContentTemplate}"
@@ -340,9 +376,9 @@
     ═══════════════════════════════════════════════════════════ -->
     <Style Selector="CheckBox">
         <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
-        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontSize" Value="13"/>
         <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="MinHeight" Value="26"/>
     </Style>
     <Style Selector="CheckBox /template/ Border#NormalRectangle">
         <Setter Property="Background" Value="{DynamicResource InputBg}"/>
@@ -383,10 +419,11 @@
         <Setter Property="Foreground" Value="{DynamicResource InputFg}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource InputBorder}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="CornerRadius" Value="6"/>
-        <Setter Property="Padding" Value="9,6"/>
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="Padding" Value="12,0"/>
+        <Setter Property="MinHeight" Value="32"/>
         <Setter Property="FontSize" Value="13"/>
-        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="CaretBrush" Value="{DynamicResource InputCaret}"/>
         <Setter Property="SelectionBrush" Value="{DynamicResource AccentMuted}"/>
         <Setter Property="SelectionForegroundBrush" Value="{DynamicResource TextPrimary}"/>
@@ -395,7 +432,7 @@
         <Setter Property="Background" Value="{DynamicResource InputBg}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource InputBorder}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="CornerRadius" Value="8"/>
     </Style>
     <Style Selector="TextBox:pointerover /template/ Border#PART_BorderElement">
         <Setter Property="Background" Value="{DynamicResource InputBg}"/>
@@ -420,10 +457,11 @@
         <Setter Property="Foreground" Value="{DynamicResource InputFg}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource InputBorder}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="CornerRadius" Value="6"/>
-        <Setter Property="Padding" Value="9,6"/>
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="Padding" Value="12,0"/>
+        <Setter Property="MinHeight" Value="32"/>
         <Setter Property="FontSize" Value="13"/>
-        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="PlaceholderForeground" Value="{DynamicResource TextTertiary}"/>
     </Style>
@@ -431,7 +469,7 @@
         <Setter Property="Background" Value="{DynamicResource InputBg}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource InputBorder}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="CornerRadius" Value="8"/>
     </Style>
     <Style Selector="ComboBox:pointerover /template/ Border#Background">
         <Setter Property="BorderBrush" Value="{DynamicResource InputBorderHover}"/>
@@ -450,14 +488,15 @@
         <Setter Property="Background" Value="{DynamicResource MenuPopupBg}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource MenuBorder}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="CornerRadius" Value="8"/>
     </Style>
 
     <Style Selector="ComboBoxItem">
         <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
-        <Setter Property="Padding" Value="9,6"/>
+        <Setter Property="Padding" Value="12,0"/>
+        <Setter Property="MinHeight" Value="30"/>
         <Setter Property="FontSize" Value="13"/>
-        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="Cursor" Value="Hand"/>
     </Style>
     <Style Selector="ComboBoxItem:pointerover /template/ ContentPresenter">
@@ -505,13 +544,14 @@
     <Style Selector="Menu">
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{DynamicResource MenuFg}"/>
-        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontSize" Value="13"/>
         <Setter Property="Padding" Value="0"/>
     </Style>
     <Style Selector="MenuItem">
         <Setter Property="Foreground" Value="{DynamicResource MenuFg}"/>
-        <Setter Property="FontSize" Value="12"/>
-        <Setter Property="Padding" Value="10,6"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Padding" Value="12,0"/>
+        <Setter Property="MinHeight" Value="30"/>
         <Setter Property="Cursor" Value="Hand"/>
     </Style>
     <Style Selector="MenuItem:pointerover /template/ Border#PART_LayoutRoot">
@@ -534,13 +574,13 @@
         <Setter Property="Background" Value="{DynamicResource MenuPopupBg}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource MenuBorder}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="CornerRadius" Value="8"/>
         <Setter Property="Padding" Value="4"/>
     </Style>
     <Style Selector="Separator">
         <Setter Property="Background" Value="{DynamicResource MenuSeparator}"/>
         <Setter Property="Height" Value="1"/>
-        <Setter Property="Margin" Value="6,4"/>
+        <Setter Property="Margin" Value="8,4"/>
     </Style>
 
     <!-- ══════════════════════════════════════════════════════════
@@ -571,9 +611,9 @@
         <Setter Property="Foreground" Value="{DynamicResource TooltipFg}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource TooltipBorder}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="CornerRadius" Value="6"/>
-        <Setter Property="Padding" Value="9,6"/>
-        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="Padding" Value="12,8"/>
+        <Setter Property="FontSize" Value="13"/>
     </Style>
 
     <!-- ══════════════════════════════════════════════════════════
@@ -584,13 +624,21 @@
         <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtle}"/>
     </Style>
 
-    <!-- One grouped block inside a column -->
+    <!-- One grouped block inside a column.
+
+         A hairline, not the accent outline the Windows build puts here.
+         Eight cards each ringed in accent and carrying a glow is the
+         loudest thing on screen and flattens the hierarchy — everything
+         shouts, so nothing reads as primary. The accent now appears only
+         where it means something: the primary action, and the selected
+         segment. A pride theme still runs its flag across both.
+    -->
     <Style Selector="Border.sidebar-card">
         <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBg}"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource AccentOutline}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtle}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="CornerRadius" Value="8"/>
-        <Setter Property="Padding" Value="12"/>
+        <Setter Property="CornerRadius" Value="12"/>
+        <Setter Property="Padding" Value="16"/>
         <Setter Property="Margin" Value="0,0,0,12"/>
     </Style>
 
@@ -598,22 +646,23 @@
     <Style Selector="Border.card-divider">
         <Setter Property="Height" Value="1"/>
         <Setter Property="Background" Value="{DynamicResource BorderSubtle}"/>
-        <Setter Property="Margin" Value="0,10"/>
+        <Setter Property="Margin" Value="0,12"/>
     </Style>
 
     <!-- Uppercase group heading -->
     <Style Selector="TextBlock.section-header">
         <Setter Property="Foreground" Value="{DynamicResource TextTertiary}"/>
-        <Setter Property="FontSize" Value="10"/>
-        <Setter Property="FontWeight" Value="Bold"/>
-        <Setter Property="Margin" Value="0,0,0,10"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="LetterSpacing" Value="0.5"/>
+        <Setter Property="Margin" Value="0,0,0,12"/>
     </Style>
 
     <!-- Label above a field -->
     <Style Selector="TextBlock.field-label">
         <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
         <Setter Property="FontSize" Value="11"/>
-        <Setter Property="Margin" Value="0,0,0,5"/>
+        <Setter Property="Margin" Value="0,0,0,4"/>
     </Style>
 
     <!-- Inline label sitting beside a control -->
@@ -627,7 +676,8 @@
     <!-- Readout value, e.g. "85%" -->
     <Style Selector="TextBlock.value-text">
         <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
-        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontFeatures" Value="+tnum"/>
         <Setter Property="VerticalAlignment" Value="Center"/>
     </Style>
 

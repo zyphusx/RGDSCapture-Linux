@@ -11,8 +11,6 @@
         TransparencyLevelHint="Transparent"
         ShowInTaskbar="False"
         Background="Transparent"
-        FontFamily="Inter,Cantarell,Noto Sans,sans-serif"
-        FontSize="13"
         UseLayoutRounding="True">
 
     <!-- Borderless card so the dialog matches the main window's chrome.
@@ -39,17 +37,17 @@
                         <StackPanel>
                             <TextBlock Text="SSH Credentials"
                                        Foreground="{DynamicResource TextPrimary}"
-                                       FontSize="16"
+                                       FontSize="15"
                                        FontWeight="SemiBold"/>
                             <TextBlock Text="Sign in to the console to start streaming."
                                        Foreground="{DynamicResource TextSecondary}"
-                                       FontSize="12"
+                                       FontSize="13"
                                        Margin="0,4,0,0"/>
                         </StackPanel>
                     </Border>
 
                     <TextBlock Text="Username" Classes="field-label"/>
-                    <TextBox Name="TxtUsername" Margin="0,0,0,14"/>
+                    <TextBox Name="TxtUsername" Margin="0,0,0,12"/>
 
                     <TextBlock Text="Password" Classes="field-label"/>
                     <!-- Avalonia has no PasswordBox; a TextBox with
@@ -60,8 +58,8 @@
 
                     <CheckBox Name="ChkRemember"
                               Content="Remember credentials on this device"
-                              FontSize="12"
-                              Margin="0,0,0,14"
+                              FontSize="13"
+                              Margin="0,0,0,12"
                               ToolTip.Tip="The password is handed to your desktop keyring, where it is encrypted at rest and unreadable while the keyring is locked"/>
 
                     <!-- Inline rather than a popup: the Windows build raises a
@@ -69,10 +67,10 @@
                          blank field, and Avalonia has no MessageBox anyway. -->
                     <TextBlock Name="ValidationText"
                                Foreground="{DynamicResource DangerFgSolid}"
-                               FontSize="12"
+                               FontSize="13"
                                TextWrapping="Wrap"
                                IsVisible="False"
-                               Margin="0,0,0,10"/>
+                               Margin="0,0,0,8"/>
 
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                         <Button Name="BtnCancel"

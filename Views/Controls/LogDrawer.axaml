@@ -58,7 +58,7 @@
                     Background="{DynamicResource SurfaceRaisedBg}"
                     BorderBrush="{DynamicResource BorderSubtle}"
                     BorderThickness="0,0,0,1"
-                    Padding="14,10">
+                    Padding="12,8">
                 <DockPanel>
                     <Button DockPanel.Dock="Right"
                             Classes="ghost icon"
@@ -77,10 +77,10 @@
                     Background="{DynamicResource SurfaceRaisedBg}"
                     BorderBrush="{DynamicResource BorderSubtle}"
                     BorderThickness="0,1,0,0"
-                    Padding="10">
+                    Padding="8">
                 <Button Content="Clear Log"
                         HorizontalAlignment="Stretch"
-                        FontSize="12"
+                        FontSize="13"
                         Command="{Binding Log.ClearCommand}"
                         AutomationProperties.Name="Clear event log"/>
             </Border>
@@ -94,10 +94,9 @@
                               AutomationProperties.Name="Event log output">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:LogEntry">
-                            <TextBlock Classes="log-line"
+                            <TextBlock Classes="log-line numeric"
                                        Classes.error="{Binding IsError}"
                                        TextWrapping="Wrap"
-                                       FontFamily="Cascadia Code,Consolas,monospace"
                                        FontSize="11"
                                        LineHeight="16"
                                        Margin="0,1">

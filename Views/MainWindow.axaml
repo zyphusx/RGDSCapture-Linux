@@ -10,8 +10,6 @@
         MinHeight="620" MinWidth="900"
         Background="{DynamicResource BackdropBg}"
         WindowStartupLocation="CenterScreen"
-        FontFamily="Inter,Cantarell,Noto Sans,sans-serif"
-        FontSize="13"
         UseLayoutRounding="True"
         ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaChromeHints="NoChrome"
@@ -64,7 +62,7 @@
              collapsed width is a class and the easing lives on the
              transition between the two states. -->
         <Style Selector="Border.panel-host">
-            <Setter Property="Width" Value="268"/>
+            <Setter Property="Width" Value="288"/>
             <Setter Property="Transitions">
                 <Transitions>
                     <DoubleTransition Property="Width" Duration="0:0:0.18" Easing="CubicEaseOut"/>
@@ -129,12 +127,12 @@
                             <Ellipse Width="8" Height="8"
                                      Fill="{Binding StatusDotBrush}"
                                      VerticalAlignment="Center"
-                                     Margin="14,0,9,0"
+                                     Margin="12,0,8,0"
                                      ToolTip.Tip="{Binding ConnectionLabel}"/>
 
                             <TextBlock Text="RGDSCapture"
                                        Foreground="{DynamicResource TitleBarFg}"
-                                       FontSize="12"
+                                       FontSize="13"
                                        FontWeight="SemiBold"
                                        VerticalAlignment="Center"
                                        Margin="0,0,16,0"/>
@@ -367,7 +365,7 @@
 
                             <Button Classes="caption"
                                     Command="{Binding ToggleRightPanelCommand}"
-                                    Margin="0,0,6,0"
+                                    Margin="0,0,4,0"
                                     AutomationProperties.Name="Toggle capture panel"
                                     ToolTip.Tip="Show / hide the capture panel  (Ctrl+J)">
                                 <Grid Width="15" Height="12">
@@ -425,7 +423,7 @@
                             Grid.Column="0"
                             ClipToBounds="True"
                             BorderThickness="0,0,1,0">
-                        <controls:DevicePanel Width="268" HorizontalAlignment="Left"/>
+                        <controls:DevicePanel Width="288" HorizontalAlignment="Left"/>
                     </Border>
 
                     <!-- Video stage + log drawer overlay -->
@@ -447,7 +445,7 @@
                             Grid.Column="2"
                             ClipToBounds="True"
                             BorderThickness="1,0,0,0">
-                        <controls:CapturePanel Width="268" HorizontalAlignment="Right"/>
+                        <controls:CapturePanel Width="288" HorizontalAlignment="Right"/>
                     </Border>
                 </Grid>
 
@@ -456,17 +454,17 @@
                         Background="{DynamicResource StatusBarBg}"
                         BorderBrush="{DynamicResource StatusBarBorder}"
                         BorderThickness="0,1,0,0"
-                        Padding="14,6">
+                        Padding="16,8">
                     <DockPanel LastChildFill="False">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <Ellipse Width="7" Height="7"
                                      Fill="{Binding StatusDotBrush}"
                                      VerticalAlignment="Center"
-                                     Margin="0,0,9,0"/>
+                                     Margin="0,0,8,0"/>
                             <TextBlock Classes="status"
                                        Classes.error="{Binding StatusIsError}"
                                        Text="{Binding StatusMessage}"
-                                       FontSize="12"/>
+                                       FontSize="13"/>
                         </StackPanel>
 
                         <TextBlock DockPanel.Dock="Right"

@@ -15,7 +15,7 @@
 
     <ScrollViewer VerticalScrollBarVisibility="Auto"
                   HorizontalScrollBarVisibility="Disabled"
-                  Padding="12,12,12,12">
+                  Padding="12,16">
         <StackPanel>
 
             <!-- ══ Connection ══════════════════════════════════════ -->
@@ -27,7 +27,7 @@
                     <ComboBox IsEnabled="{Binding IsDisconnected}"
                               SelectedValueBinding="{Binding Tag, DataType=ac:ComboBoxItem}"
                               SelectedValue="{Binding DeviceType}"
-                              Margin="0,0,0,10"
+                              Margin="0,0,0,8"
                               AutomationProperties.Name="Device type"
                               ToolTip.Tip="Which Anbernic device this is">
                         <!-- Tagged with the enum value, not its name: WPF's
@@ -93,19 +93,18 @@
                         <Button Content="↺ Top"
                                 Command="{Binding RestartTopCommand}"
                                 Margin="0,0,4,0"
-                                FontSize="12" Padding="4,7"
+                                FontSize="13" Padding="8,0"
                                 AutomationProperties.Name="Restart top stream"
                                 ToolTip.Tip="Restart top screen stream  (F6)"/>
                         <Button Content="↺ Bot"
                                 Command="{Binding RestartBottomCommand}"
-                                Margin="2,0,2,0"
-                                FontSize="12" Padding="4,7"
+                                                                FontSize="13" Padding="8,0"
                                 AutomationProperties.Name="Restart bottom stream"
                                 ToolTip.Tip="Restart bottom screen stream  (F7)"/>
                         <Button Content="↺ All"
                                 Command="{Binding RestartAllCommand}"
                                 Margin="4,0,0,0"
-                                FontSize="12" Padding="4,7"
+                                FontSize="13" Padding="8,0"
                                 AutomationProperties.Name="Restart all streams"
                                 ToolTip.Tip="Restart all streams  (F5)"/>
                     </UniformGrid>
@@ -188,7 +187,7 @@
                                          ToolTip.Tip="Bottom screen only"/>
                             <ToggleButton Classes="chip"
                                           Content="Swap"
-                                          Margin="1"
+                                          Margin="0"
                                           IsChecked="{Binding IsSwapped, Mode=OneWay}"
                                           Command="{Binding ToggleSwapCommand}"
                                           ToolTip.Tip="Swap which screen takes the primary position"/>
@@ -273,7 +272,7 @@
                     <Button Command="{Binding OpenThemePickerCommand}"
                             HorizontalAlignment="Stretch"
                             HorizontalContentAlignment="Left"
-                            FontSize="12" Padding="10,7"
+                            FontSize="13" Padding="8,8"
                             Margin="0,0,0,8"
                             AutomationProperties.Name="Open theme picker"
                             ToolTip.Tip="Choose a theme preset or a custom accent colour  (Ctrl+T)">
@@ -284,7 +283,7 @@
                                      Stroke="{DynamicResource BorderStrong}"
                                      StrokeThickness="1"
                                      VerticalAlignment="Center"
-                                     Margin="0,0,9,0"/>
+                                     Margin="0,0,8,0"/>
                             <TextBlock DockPanel.Dock="Left"
                                        Text="{Binding ThemeName}"
                                        VerticalAlignment="Center"/>
@@ -321,14 +320,14 @@
                                 Classes="danger"
                                 Command="{Binding ShutdownCommand}"
                                 Margin="0,0,4,0"
-                                FontSize="12" Padding="4,7"
+                                FontSize="13" Padding="8,0"
                                 AutomationProperties.Name="Shutdown console"
                                 ToolTip.Tip="Send shutdown command to the console"/>
                         <Button Content="Reboot"
                                 Classes="danger"
                                 Command="{Binding RebootCommand}"
                                 Margin="4,0,0,0"
-                                FontSize="12" Padding="4,7"
+                                FontSize="13" Padding="8,0"
                                 AutomationProperties.Name="Reboot console"
                                 ToolTip.Tip="Send reboot command to the console"/>
                     </UniformGrid>

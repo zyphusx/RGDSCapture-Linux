@@ -25,7 +25,7 @@
 
     <ScrollViewer VerticalScrollBarVisibility="Auto"
                   HorizontalScrollBarVisibility="Disabled"
-                  Padding="12,12,12,12">
+                  Padding="12,16">
         <StackPanel>
 
             <!-- ══ Record ══════════════════════════════════════════ -->
@@ -39,7 +39,7 @@
                             Command="{Binding Top.ToggleRecordingCommand}"
                             IsEnabled="{Binding IsConnected}"
                             HorizontalAlignment="Stretch"
-                            Margin="0,0,0,6"
+                            Margin="0,0,0,4"
                             AutomationProperties.Name="Record top screen"
                             ToolTip.Tip="Record top screen to MP4 (no re-encoding)"/>
 
@@ -49,7 +49,7 @@
                             Command="{Binding Bottom.ToggleRecordingCommand}"
                             IsEnabled="{Binding IsConnectedDualScreen}"
                             HorizontalAlignment="Stretch"
-                            Margin="0,0,0,6"
+                            Margin="0,0,0,4"
                             AutomationProperties.Name="Record bottom screen"
                             ToolTip.Tip="Record bottom screen to MP4 (no re-encoding)"/>
 
@@ -58,7 +58,7 @@
                             Content="{Binding CombinedRecordButtonText}"
                             Command="{Binding ToggleCombinedRecordingCommand}"
                             HorizontalAlignment="Stretch"
-                            Margin="0,0,0,10"
+                            Margin="0,0,0,8"
                             AutomationProperties.Name="Record combined"
                             ToolTip.Tip="Record both screens (stacked) + Line-In audio to one MP4"/>
 
@@ -66,7 +66,7 @@
                             Command="{Binding ScreenshotCommand}"
                             HorizontalAlignment="Stretch"
                             HorizontalContentAlignment="Left"
-                            FontSize="12" Padding="10,8"
+                            FontSize="13" Padding="8,8"
                             AutomationProperties.Name="Take screenshot"
                             ToolTip.Tip="Save a PNG of both screens  (F12)"/>
                 </StackPanel>
@@ -81,8 +81,8 @@
                             Command="{Binding SaveReplayCommand}"
                             HorizontalAlignment="Stretch"
                             HorizontalContentAlignment="Left"
-                            FontSize="12" Padding="10,8"
-                            Margin="0,0,0,6"
+                            FontSize="13" Padding="8,8"
+                            Margin="0,0,0,4"
                             AutomationProperties.Name="Save instant replay"
                             ToolTip.Tip="Save the buffered moments of both screens to MP4  (F9)"/>
 
@@ -90,8 +90,8 @@
                             Command="{Binding SaveGifCommand}"
                             HorizontalAlignment="Stretch"
                             HorizontalContentAlignment="Left"
-                            FontSize="12" Padding="10,8"
-                            Margin="0,0,0,10"
+                            FontSize="13" Padding="8,8"
+                            Margin="0,0,0,8"
                             AutomationProperties.Name="Save replay as GIF"
                             ToolTip.Tip="Save the last 10 seconds as an animated GIF  (F10)"/>
 
@@ -131,14 +131,14 @@
                     <TextBlock Text="Input (Line-In)" Classes="field-label"/>
                     <ComboBox ItemsSource="{Binding Audio.InputDevices}"
                               SelectedItem="{Binding Audio.SelectedInput}"
-                              Margin="0,0,0,10"
+                              Margin="0,0,0,8"
                               AutomationProperties.Name="Audio input device"
                               ToolTip.Tip="Select the Line-In / audio input device"/>
 
                     <TextBlock Text="Output" Classes="field-label"/>
                     <ComboBox ItemsSource="{Binding Audio.OutputDevices}"
                               SelectedItem="{Binding Audio.SelectedOutput}"
-                              Margin="0,0,0,10"
+                              Margin="0,0,0,8"
                               AutomationProperties.Name="Audio output device"
                               ToolTip.Tip="Select the audio output device"/>
 
@@ -159,7 +159,7 @@
                         </Grid.ColumnDefinitions>
 
                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                            <DockPanel Margin="0,0,0,3" LastChildFill="False">
+                            <DockPanel Margin="0,0,0,4" LastChildFill="False">
                                 <TextBlock DockPanel.Dock="Left" Text="Volume"
                                            Classes="field-label"
                                            Margin="0"/>
@@ -174,18 +174,18 @@
                         </StackPanel>
 
                         <Border Grid.Column="1"
-                                Width="7" Height="34"
+                                Width="8" Height="40"
                                 Background="{DynamicResource VuBg}"
                                 BorderBrush="{DynamicResource VuBorder}"
-                                BorderThickness="1" CornerRadius="3"
+                                BorderThickness="1" CornerRadius="4"
                                 VerticalAlignment="Bottom"
-                                Margin="12,0,3,0"
+                                Margin="12,0,4,0"
                                 ToolTip.Tip="Left channel level"
                                 AutomationProperties.Name="Left channel level">
                             <Rectangle Fill="{Binding Audio.VuBrush}"
                                        VerticalAlignment="Bottom"
-                                       Height="32"
-                                       RadiusX="2" RadiusY="2"
+                                       Height="38"
+                                       RadiusX="3" RadiusY="3"
                                        RenderTransformOrigin="0.5,1">
                                 <Rectangle.RenderTransform>
                                     <ScaleTransform ScaleY="{Binding Audio.LeftLevel}"/>
@@ -194,17 +194,17 @@
                         </Border>
 
                         <Border Grid.Column="2"
-                                Width="7" Height="34"
+                                Width="8" Height="40"
                                 Background="{DynamicResource VuBg}"
                                 BorderBrush="{DynamicResource VuBorder}"
-                                BorderThickness="1" CornerRadius="3"
+                                BorderThickness="1" CornerRadius="4"
                                 VerticalAlignment="Bottom"
                                 ToolTip.Tip="Right channel level"
                                 AutomationProperties.Name="Right channel level">
                             <Rectangle Fill="{Binding Audio.VuBrush}"
                                        VerticalAlignment="Bottom"
-                                       Height="32"
-                                       RadiusX="2" RadiusY="2"
+                                       Height="38"
+                                       RadiusX="3" RadiusY="3"
                                        RenderTransformOrigin="0.5,1">
                                 <Rectangle.RenderTransform>
                                     <ScaleTransform ScaleY="{Binding Audio.RightLevel}"/>
@@ -222,14 +222,13 @@
 
                     <Border Background="{DynamicResource TimerBg}"
                             BorderBrush="{DynamicResource TimerBorder}"
-                            BorderThickness="1" CornerRadius="7"
-                            Padding="10,10"
-                            Margin="0,0,0,10">
+                            BorderThickness="1" CornerRadius="8"
+                            Padding="12"
+                            Margin="0,0,0,8">
                         <TextBlock Text="{Binding Timer.Display}"
-                                   Classes="timer"
+                                   Classes="timer numeric"
                                    Classes.running="{Binding Timer.IsRunning}"
-                                   FontFamily="Cascadia Code,Consolas,monospace"
-                                   FontSize="24"
+                                   FontSize="28"
                                    FontWeight="SemiBold"
                                    HorizontalAlignment="Center"
                                    AutomationProperties.Name="Speedrun timer"/>
@@ -238,7 +237,7 @@
                     <Button Content="{Binding Timer.StartPauseText}"
                             Command="{Binding Timer.StartPauseCommand}"
                             HorizontalAlignment="Stretch"
-                            Margin="0,0,0,6"
+                            Margin="0,0,0,4"
                             AutomationProperties.Name="Start or pause timer"
                             ToolTip.Tip="Start / pause the timer  (Space)"/>
 
@@ -246,13 +245,13 @@
                         <Button Content="⚑  Lap"
                                 Command="{Binding Timer.LapCommand}"
                                 Margin="0,0,4,0"
-                                FontSize="12" Padding="4,7"
+                                FontSize="13" Padding="8,0"
                                 AutomationProperties.Name="Record lap"
                                 ToolTip.Tip="Record a lap split to the event log"/>
                         <Button Content="✕  Reset"
                                 Command="{Binding Timer.ResetCommand}"
                                 Margin="4,0,0,0"
-                                FontSize="12" Padding="4,7"
+                                FontSize="13" Padding="8,0"
                                 AutomationProperties.Name="Reset timer"
                                 ToolTip.Tip="Reset the timer to zero"/>
                     </UniformGrid>

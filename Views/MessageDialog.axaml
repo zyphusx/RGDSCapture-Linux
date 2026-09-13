@@ -9,7 +9,6 @@
         TransparencyLevelHint="Transparent"
         ShowInTaskbar="False"
         Background="Transparent"
-        FontFamily="Inter,Cantarell,Noto Sans,sans-serif"
         FontSize="13">
 
     <!-- Avalonia has no MessageBox, and the WPF build leaned on it for
@@ -24,18 +23,18 @@
                 BoxShadow="0 4 28 #73000000">
 
             <StackPanel Margin="24">
-                <Border Name="DragHandle" Background="Transparent" Margin="0,0,0,14">
+                <Border Name="DragHandle" Background="Transparent" Margin="0,0,0,12">
                     <TextBlock Name="TitleText"
                                Foreground="{DynamicResource TextPrimary}"
-                               FontSize="16"
+                               FontSize="15"
                                FontWeight="SemiBold"/>
                 </Border>
 
                 <TextBlock Name="MessageText"
                            Foreground="{DynamicResource TextSecondary}"
-                           FontSize="12"
+                           FontSize="13"
                            TextWrapping="Wrap"
-                           Margin="0,0,0,22"/>
+                           Margin="0,0,0,20"/>
 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Name="BtnNo"
