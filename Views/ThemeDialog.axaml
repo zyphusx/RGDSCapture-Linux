@@ -4,6 +4,7 @@
         x:Class="RGDSCapture.Views.ThemeDialog"
         x:DataType="vm:MainViewModel"
         Title="Theme"
+        Icon="/Assets/icon.png"
         Width="560"
         SizeToContent="Height"
         CanResize="False"

@@ -6,6 +6,7 @@
         x:Class="RGDSCapture.Views.FullScreenWindow"
         x:DataType="views:FullscreenContext"
         Title="RGDSCapture — Fullscreen"
+        Icon="/Assets/icon.png"
         SystemDecorations="None"
         WindowState="FullScreen"
         CanResize="False"
