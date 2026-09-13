@@ -1,0 +1,1290 @@
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Media.Immutable;
+using Avalonia.Threading;
+using RGDSCapture.Core;
+using RGDSCapture.Services;
+
+namespace RGDSCapture.ViewModels
+{
+    /// <summary>
+    /// Application orchestrator: connection lifecycle, stream health,
+    /// layout/theme, screenshots and console power. Views supply the
+    /// interactive bits (credential prompt, confirmations, fullscreen)
+    /// through delegates so this class stays UI-framework-light.
+    /// </summary>
+    public sealed class MainViewModel : ObservableObject
+    {
+        private static readonly IBrush DotConnectedBrush = Swatch(0x13, 0xA1, 0x0E);
+        private static readonly IBrush DotLostBrush = Swatch(0xE8, 0x11, 0x23);
+        private static readonly IBrush DotIdleBrush = Swatch(0x8A, 0x8A, 0x8A);
+
+        private readonly SettingsService _settingsService;
+        private readonly SshService _ssh = new();
+        private readonly DispatcherTimer _renderTimer;
+        private readonly DispatcherTimer _healthTimer;
+        private readonly StreamHealthTracker _topTracker;
+        private readonly StreamHealthTracker _bottomTracker;
+        private readonly ReplayBuffer _topReplay = new();
+        private readonly ReplayBuffer _bottomReplay = new();
+        private readonly AudioReplayBuffer _audioReplay = new();
+        private AudioRecordingTap? _replayAudioTap;
+        private CombinedRecordingSession? _combined;
+        private CancellationTokenSource? _connectCts;
+
+        // Auto-reconnect: last credentials used this session (memory only)
+        // and the cancellation source for the backoff loop.
+        private (string User, string Pass)? _sessionCreds;
+        private bool _pendingRemember;
+        private CancellationTokenSource? _reconnectCts;
+
+        // Network stats deltas (previous cumulative counters per screen)
+        private (long P, long L, long B) _topStatPrev, _bottomStatPrev;
+
+        // Recording clock for the combined session's REC indicator
+        private DateTime _combinedStartUtc;
+
+        // GIF clips stay short — they balloon in size beyond ~10 s
+        private const int GifSeconds = 10;
+
+        // ── View-supplied interaction hooks ───────────────────────────
+        public Func<string, (string User, string Pass, bool Remember)?>? PromptCredentials { get; set; }
+        public Func<string, string, bool>? Confirm { get; set; }
+        public event Action<ScreenViewModel>? FullscreenRequested;
+        public event Action? ThemePickerRequested;
+
+        // ── Child view-models ─────────────────────────────────────────
+        public ScreenViewModel Top { get; }
+        public ScreenViewModel Bottom { get; }
+        public AudioViewModel Audio { get; }
+        public TimerViewModel Timer { get; }
+        public LogViewModel Log { get; } = new();
+
+        public AppSettings Settings => _settingsService.Current;
+
+        // ── Connection state ──────────────────────────────────────────
+        private ConnectionState _connection = ConnectionState.Disconnected;
+        public ConnectionState Connection
+        {
+            get => _connection;
+            private set
+            {
+                if (SetProperty(ref _connection, value))
+                {
+                    OnPropertyChanged(nameof(IsConnected));
+                    OnPropertyChanged(nameof(IsDisconnected));
+                    OnPropertyChanged(nameof(ConnectButtonText));
+                    OnPropertyChanged(nameof(StatusDotBrush));
+                    OnPropertyChanged(nameof(IsConnectedDualScreen));
+                    OnPropertyChanged(nameof(ConnectionLabel));
+                }
+            }
+        }
+
+        public bool IsConnected => Connection == ConnectionState.Connected;
+        public bool IsDisconnected => Connection is ConnectionState.Disconnected or ConnectionState.Lost;
+
+        public string ConnectButtonText => Connection switch
+        {
+            ConnectionState.Connecting => "Connecting...",
+            ConnectionState.Connected => "Disconnect",
+            ConnectionState.Lost => "Reconnect",
+            _ => "Connect"
+        };
+
+        public IBrush StatusDotBrush => Connection switch
+        {
+            ConnectionState.Connected => DotConnectedBrush,
+            ConnectionState.Lost => DotLostBrush,
+            _ => DotIdleBrush
+        };
+
+        private string _deviceIp;
+        public string DeviceIp
+        {
+            get => _deviceIp;
+            set
+            {
+                if (SetProperty(ref _deviceIp, value))
+                    OnPropertyChanged(nameof(DeviceSummary));
+            }
+        }
+
+        // ── Device type ───────────────────────────────────────────────
+        private DeviceType _deviceType;
+        public DeviceType DeviceType
+        {
+            get => _deviceType;
+            set
+            {
+                // UI already disables the picker while connected; this is the
+                // code-level backstop so a mid-connection change (any caller,
+                // not just the picker) can never desync _ssh.DeviceType from
+                // the pipeline actually running on the device.
+                if (!IsDisconnected) return;
+                if (!SetProperty(ref _deviceType, value)) return;
+
+                Settings.DeviceType = value.ToString();
+                _ssh.DeviceType = value;
+                OnPropertyChanged(nameof(IsSingleScreenDevice));
+                OnPropertyChanged(nameof(IsDualScreenDevice));
+                OnPropertyChanged(nameof(IsConnectedDualScreen));
+                OnPropertyChanged(nameof(DeviceTypeLabel));
+                OnPropertyChanged(nameof(DeviceSummary));
+
+                // The single-screen UI has no side-by-side/hybrid/stack — pin
+                // it to Top Only so the existing layout code (which already
+                // collapses Bottom and expands Top to fill the grid) applies.
+                if (IsSingleScreenDevice) Layout = LayoutMode.TopOnly;
+
+                RefreshCommandStates();
+            }
+        }
+
+        /// <summary>True for devices with one screen (RG353V) — hides/disables the dual-screen-only UI.</summary>
+        public bool IsSingleScreenDevice => DeviceType == DeviceType.Rg353V;
+        public bool IsDualScreenDevice => !IsSingleScreenDevice;
+
+        /// <summary>Connected AND has a second screen — gates Bottom-specific controls that (unlike the
+        /// commands they sit next to) have no CanExecute of their own to disable them automatically.</summary>
+        public bool IsConnectedDualScreen => IsConnected && !IsSingleScreenDevice;
+
+        private string _sshPortText;
+        public string SshPortText
+        {
+            get => _sshPortText;
+            set => SetProperty(ref _sshPortText, value);
+        }
+
+        // ── Status bar ────────────────────────────────────────────────
+        private string _statusMessage = "Not connected";
+        public string StatusMessage
+        {
+            get => _statusMessage;
+            private set => SetProperty(ref _statusMessage, value);
+        }
+
+        private bool _statusIsError;
+        public bool StatusIsError
+        {
+            get => _statusIsError;
+            private set => SetProperty(ref _statusIsError, value);
+        }
+
+        // ── Layout / theme ────────────────────────────────────────────
+        private LayoutMode _layout;
+        public LayoutMode Layout
+        {
+            get => _layout;
+            set
+            {
+                if (SetProperty(ref _layout, value))
+                {
+                    Settings.Layout = value.ToString();
+                    OnPropertyChanged(nameof(IsLayoutVertical));
+                    OnPropertyChanged(nameof(IsLayoutSideBySide));
+                    OnPropertyChanged(nameof(IsLayoutTopOnly));
+                    OnPropertyChanged(nameof(IsLayoutBottomOnly));
+                    OnPropertyChanged(nameof(IsLayoutHybrid));
+                }
+            }
+        }
+
+        public bool IsLayoutVertical => Layout == LayoutMode.VerticalStack;
+        public bool IsLayoutSideBySide => Layout == LayoutMode.SideBySide;
+        public bool IsLayoutTopOnly => Layout == LayoutMode.TopOnly;
+        public bool IsLayoutBottomOnly => Layout == LayoutMode.BottomOnly;
+        public bool IsLayoutHybrid => Layout == LayoutMode.Hybrid;
+
+        // ── Display preferences (swap / gap / rotation / filter) ─────
+        public bool IsSwapped => Settings.SwapScreens;
+
+        public int ScreenGap => Settings.ScreenGap;
+        public bool IsGapNone => Settings.ScreenGap == 0;
+        public bool IsGapSmall => Settings.ScreenGap == 4;
+        public bool IsGapNormal => Settings.ScreenGap == 8;
+        public bool IsGapWide => Settings.ScreenGap == 16;
+
+        public double RotationAngle => Settings.Rotation;
+        public bool IsRotation0 => Settings.Rotation == 0;
+        public bool IsRotation90 => Settings.Rotation == 90;
+        public bool IsRotation180 => Settings.Rotation == 180;
+        public bool IsRotation270 => Settings.Rotation == 270;
+
+        /// <summary>
+        /// How the video surface resamples. None is nearest-neighbour, which
+        /// is the point of the sharp setting: these are 320x240-era handheld
+        /// screens, and any smoothing at all turns pixel art to mush.
+        /// </summary>
+        public BitmapInterpolationMode ScalingMode => Settings.SmoothScaling
+            ? BitmapInterpolationMode.HighQuality
+            : BitmapInterpolationMode.None;
+        public bool IsScalingSharp => !Settings.SmoothScaling;
+        public bool IsScalingSmooth => Settings.SmoothScaling;
+
+        // ── UI scale ──────────────────────────────────────────────────
+        /// <summary>Every selectable zoom factor, for the View menu.</summary>
+        public IReadOnlyList<UiScaleChoice> UiScales { get; }
+
+        // ── Theme ─────────────────────────────────────────────────────
+        /// <summary>Every built-in preset, for the picker and the View menu.</summary>
+        public IReadOnlyList<ThemeChoice> Themes { get; }
+
+        // The picker shows these as separate sections; the View menu still
+        // lists Themes in full.
+        public IEnumerable<ThemeChoice> DarkThemes =>
+            Themes.Where(t => t.Preset.Group == ThemeGroups.Dark);
+        public IEnumerable<ThemeChoice> LightThemes =>
+            Themes.Where(t => t.Preset.Group == ThemeGroups.Light);
+        public IEnumerable<ThemeChoice> PrideThemes =>
+            Themes.Where(t => t.Preset.Group == ThemeGroups.Pride);
+
+        public string ThemeName => ThemeService.Current.Name;
+
+        /// <summary>Accent in force, shown as the picker's current swatch.</summary>
+        public IBrush AccentSwatch =>
+            new ImmutableSolidColorBrush(ThemeService.EffectiveAccent);
+
+        public string AccentHex => PaletteBuilder.ToHex(ThemeService.EffectiveAccent);
+
+        public bool HasCustomAccent => ThemeService.CustomAccent.HasValue;
+
+        /// <summary>
+        /// Applies a preset (and optionally an accent override) and persists it.
+        /// Every brush is a DynamicResource, so the UI restyles in place.
+        /// </summary>
+        public void ApplyTheme(ThemePreset preset, Color? accent, bool persist = true)
+        {
+            ThemeService.Apply(preset, accent);
+
+            if (persist)
+            {
+                Settings.Theme = preset.Id;
+                Settings.CustomAccent = accent.HasValue
+                    ? PaletteBuilder.ToHex(accent.Value)
+                    : null;
+                _settingsService.Save();
+            }
+
+            foreach (var choice in Themes) choice.RaiseIsActive();
+            OnPropertyChanged(nameof(ThemeName));
+            OnPropertyChanged(nameof(AccentSwatch));
+            OnPropertyChanged(nameof(AccentHex));
+            OnPropertyChanged(nameof(HasCustomAccent));
+
+            if (persist)
+            {
+                AppendLog(accent.HasValue
+                    ? $"[THEME] {preset.Name} · custom accent {PaletteBuilder.ToHex(accent.Value)}"
+                    : $"[THEME] {preset.Name}");
+            }
+        }
+
+        /// <summary>Menu entry point — applies a preset by id, clearing any accent override.</summary>
+        private void ApplyThemeById(string? id)
+        {
+            if (string.IsNullOrWhiteSpace(id)) return;
+            ApplyTheme(ThemeCatalog.Resolve(id), null);
+        }
+
+        /// <summary>
+        /// Applies a UI zoom factor and persists it. Every scaled element
+        /// shares one transform, so the windows re-lay-out in place.
+        /// </summary>
+        public void ApplyUiScale(double scale)
+        {
+            double previous = UiScaleService.Current;
+            UiScaleService.Apply(scale);
+            if (UiScaleService.IsCurrent(previous)) return;
+
+            Settings.UiScale = UiScaleService.Current;
+            _settingsService.Save();
+
+            foreach (var choice in UiScales) choice.RaiseIsActive();
+
+            AppendLog($"[UI] Scale {UiScaleService.Format(UiScaleService.Current)}");
+        }
+
+        /// <summary>Zoom shortcut entry point: +1 steps up, -1 steps down.</summary>
+        private void StepUiScale(object? parameter)
+        {
+            if (!int.TryParse(parameter?.ToString(), out int direction)) return;
+            ApplyUiScale(UiScaleService.Step(direction));
+        }
+
+        // ── Combined recording / instant replay ──────────────────────
+        private bool _isCombinedRecording;
+        public bool IsCombinedRecording
+        {
+            get => _isCombinedRecording;
+            private set
+            {
+                if (SetProperty(ref _isCombinedRecording, value))
+                    OnPropertyChanged(nameof(CombinedRecordButtonText));
+            }
+        }
+
+        public string CombinedRecordButtonText =>
+            IsCombinedRecording ? "■  Combined" : "●  Combined";
+
+        public int ReplaySeconds => Settings.ReplaySeconds;
+        public bool IsReplay15 => Settings.ReplaySeconds == 15;
+        public bool IsReplay30 => Settings.ReplaySeconds == 30;
+        public bool IsReplay60 => Settings.ReplaySeconds == 60;
+        public bool IsReplay120 => Settings.ReplaySeconds == 120;
+
+        // ── Quality preset / stats overlay ────────────────────────────
+        public bool IsQualityLow => CurrentQuality == StreamQuality.Low;
+        public bool IsQualityMedium => CurrentQuality == StreamQuality.Medium;
+        public bool IsQualityHigh => CurrentQuality == StreamQuality.High;
+
+        private StreamQuality CurrentQuality =>
+            Enum.TryParse(Settings.Quality, out StreamQuality q) ? q : StreamQuality.Medium;
+
+        private static int QualityToBps(StreamQuality q) => q switch
+        {
+            StreamQuality.Low => 1_000_000,
+            StreamQuality.High => 4_000_000,
+            _ => 2_000_000
+        };
+
+        public bool IsStatsVisible => Settings.ShowStats;
+
+        // ── Sidebar columns ───────────────────────────────────────────
+        // Which of the two control columns are expanded. Persisted so the
+        // window comes back the way it was left.
+        public bool IsLeftPanelOpen
+        {
+            get => Settings.LeftPanelOpen;
+            private set
+            {
+                if (Settings.LeftPanelOpen == value) return;
+                Settings.LeftPanelOpen = value;
+                _settingsService.Save();
+                OnPropertyChanged();
+            }
+        }
+
+        public bool IsRightPanelOpen
+        {
+            get => Settings.RightPanelOpen;
+            private set
+            {
+                if (Settings.RightPanelOpen == value) return;
+                Settings.RightPanelOpen = value;
+                _settingsService.Save();
+                OnPropertyChanged();
+            }
+        }
+
+        // ── Title-bar readouts ────────────────────────────────────────
+        public string DeviceTypeLabel =>
+            DeviceType == DeviceType.Rg353V ? "RG353V" : "RG DS";
+
+        /// <summary>"RG DS · 192.168.1.42" for the title bar.</summary>
+        public string DeviceSummary
+        {
+            get
+            {
+                string ip = DeviceIp?.Trim() ?? string.Empty;
+                return ip.Length == 0 ? DeviceTypeLabel : $"{DeviceTypeLabel} · {ip}";
+            }
+        }
+
+        public string ConnectionLabel => Connection switch
+        {
+            ConnectionState.Connecting => "Connecting",
+            ConnectionState.Connected => "Connected",
+            ConnectionState.Lost => "Connection lost",
+            _ => "Offline"
+        };
+
+        // ── Commands ──────────────────────────────────────────────────
+        public RelayCommand ToggleLeftPanelCommand { get; }
+        public RelayCommand ToggleRightPanelCommand { get; }
+        public AsyncRelayCommand ConnectCommand { get; }
+        public AsyncRelayCommand RestartTopCommand { get; }
+        public AsyncRelayCommand RestartBottomCommand { get; }
+        public AsyncRelayCommand RestartAllCommand { get; }
+        public AsyncRelayCommand ShutdownCommand { get; }
+        public AsyncRelayCommand RebootCommand { get; }
+        public RelayCommand ScreenshotCommand { get; }
+        public RelayCommand SetLayoutCommand { get; }
+        public RelayCommand SetThemeCommand { get; }
+        public RelayCommand OpenThemePickerCommand { get; }
+        public RelayCommand FullscreenCommand { get; }
+        public AsyncRelayCommand ToggleCombinedRecordingCommand { get; }
+        public AsyncRelayCommand SaveReplayCommand { get; }
+        public RelayCommand SetReplayLengthCommand { get; }
+        public AsyncRelayCommand SetQualityCommand { get; }
+        public RelayCommand ToggleStatsCommand { get; }
+        public RelayCommand ForgetCredentialsCommand { get; }
+        public RelayCommand ToggleSwapCommand { get; }
+        public RelayCommand SetScreenGapCommand { get; }
+        public RelayCommand SetRotationCommand { get; }
+        public RelayCommand SetScalingCommand { get; }
+        public RelayCommand StepUiScaleCommand { get; }
+        public RelayCommand ResetUiScaleCommand { get; }
+        public AsyncRelayCommand SaveGifCommand { get; }
+
+        // ─────────────────────────────────────────────────────────────
+        public MainViewModel(SettingsService settingsService)
+        {
+            _settingsService = settingsService;
+            var s = settingsService.Current;
+
+            _deviceIp = s.DeviceIp;
+            _sshPortText = s.SshPort.ToString();
+            _layout = s.LayoutValue;
+            _deviceType = s.DeviceTypeValue;
+
+            // Built once; tiles report "active" by asking ThemeService, so a
+            // theme applied from anywhere keeps every tile in sync.
+            Themes = ThemeCatalog.All
+                .Select(p => new ThemeChoice(
+                    p,
+                    preset => ThemeService.Current.Id == preset.Id,
+                    new RelayCommand(() => ApplyTheme(p, null))))
+                .ToList();
+
+            UiScales = UiScaleService.Steps
+                .Select(scale => new UiScaleChoice(
+                    scale,
+                    new RelayCommand(() => ApplyUiScale(scale))))
+                .ToList();
+
+            Top = new ScreenViewModel(ScreenId.Top, 5000, AppendLog);
+            Bottom = new ScreenViewModel(ScreenId.Bottom, 5001, AppendLog);
+            Audio = new AudioViewModel(s, AppendLog);
+            Timer = new TimerViewModel(AppendLog);
+
+            _topTracker = new StreamHealthTracker(
+                ScreenId.Top, Top.Receiver, RestartStreamCoreAsync, AppendLog);
+            _bottomTracker = new StreamHealthTracker(
+                ScreenId.Bottom, Bottom.Receiver, RestartStreamCoreAsync, AppendLog);
+
+            // Replay buffers stay armed whenever the receivers run — no
+            // pre-arming needed, which is the whole point of instant replay.
+            _topReplay.CapacitySeconds = s.ReplaySeconds;
+            _bottomReplay.CapacitySeconds = s.ReplaySeconds;
+            _audioReplay.CapacitySeconds = s.ReplaySeconds;
+            Top.Receiver.NalUnitReceived += _topReplay.OnNal;
+            Bottom.Receiver.NalUnitReceived += _bottomReplay.OnNal;
+
+            _ssh.VideoBitrateBps = QualityToBps(CurrentQuality);
+            _ssh.DeviceType = _deviceType;
+
+            // Re-arm the replay audio tap if the input device changes mid-session.
+            Audio.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(AudioViewModel.SelectedInput) && IsConnected)
+                {
+                    _audioReplay.Clear();
+                    StartReplayAudioTap();
+                }
+            };
+
+            _ssh.StatusChanged += (msg, err) => AppendLog(msg, err);
+            _ssh.ConnectionLost += OnConnectionLost;
+
+            _renderTimer = new DispatcherTimer(DispatcherPriority.Render)
+            {
+                Interval = TimeSpan.FromMilliseconds(33)
+            };
+            _renderTimer.Tick += (_, _) =>
+            {
+                Top.RenderPendingFrame();
+                Bottom.RenderPendingFrame();
+            };
+
+            _healthTimer = new DispatcherTimer(DispatcherPriority.Normal)
+            {
+                Interval = TimeSpan.FromSeconds(1)
+            };
+            _healthTimer.Tick += (_, _) => HealthTick();
+
+            ToggleLeftPanelCommand = new RelayCommand(() => IsLeftPanelOpen = !IsLeftPanelOpen);
+            ToggleRightPanelCommand = new RelayCommand(() => IsRightPanelOpen = !IsRightPanelOpen);
+            ConnectCommand = new AsyncRelayCommand(ToggleConnectAsync);
+            RestartTopCommand = new AsyncRelayCommand(
+                () => ManualRestartAsync(ScreenId.Top), () => IsConnected);
+            RestartBottomCommand = new AsyncRelayCommand(
+                () => ManualRestartAsync(ScreenId.Bottom), () => IsConnected && !IsSingleScreenDevice);
+            RestartAllCommand = new AsyncRelayCommand(
+                ManualRestartAllAsync, () => IsConnected);
+            ShutdownCommand = new AsyncRelayCommand(ShutdownConsoleAsync, () => IsConnected);
+            RebootCommand = new AsyncRelayCommand(RebootConsoleAsync, () => IsConnected);
+            ScreenshotCommand = new RelayCommand(TakeScreenshot, () => IsConnected);
+            SetLayoutCommand = new RelayCommand(p =>
+            {
+                if (!Enum.TryParse(p?.ToString(), out LayoutMode mode)) return;
+                // Single-screen devices only ever show Top — no other layout applies.
+                if (IsSingleScreenDevice && mode != LayoutMode.TopOnly) return;
+                Layout = mode;
+            });
+            SetThemeCommand = new RelayCommand(p => ApplyThemeById(p?.ToString()));
+            OpenThemePickerCommand = new RelayCommand(() => ThemePickerRequested?.Invoke());
+            FullscreenCommand = new RelayCommand(p =>
+            {
+                if (p is ScreenViewModel screen) FullscreenRequested?.Invoke(screen);
+            });
+            ToggleCombinedRecordingCommand = new AsyncRelayCommand(
+                ToggleCombinedRecordingAsync, () => IsConnected && !IsSingleScreenDevice);
+            SaveReplayCommand = new AsyncRelayCommand(SaveReplayAsync, () => IsConnected && !IsSingleScreenDevice);
+            SetReplayLengthCommand = new RelayCommand(SetReplayLength);
+            SetQualityCommand = new AsyncRelayCommand(SetQualityAsync);
+            ToggleStatsCommand = new RelayCommand(ToggleStats);
+            ForgetCredentialsCommand = new RelayCommand(() =>
+            {
+                _sessionCreds = null;
+                ForgetSavedCredentials(silent: false);
+            });
+            ToggleSwapCommand = new RelayCommand(ToggleSwap);
+            SetScreenGapCommand = new RelayCommand(SetScreenGap);
+            SetRotationCommand = new RelayCommand(SetRotation);
+            SetScalingCommand = new RelayCommand(SetScaling);
+            StepUiScaleCommand = new RelayCommand(StepUiScale);
+            ResetUiScaleCommand = new RelayCommand(
+                () => ApplyUiScale(UiScaleService.DefaultScale));
+            SaveGifCommand = new AsyncRelayCommand(SaveGifClipAsync, () => IsConnected && !IsSingleScreenDevice);
+
+            PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(Connection)) RefreshCommandStates();
+            };
+        }
+
+        private void RefreshCommandStates()
+        {
+            RestartTopCommand.RaiseCanExecuteChanged();
+            RestartBottomCommand.RaiseCanExecuteChanged();
+            RestartAllCommand.RaiseCanExecuteChanged();
+            ShutdownCommand.RaiseCanExecuteChanged();
+            RebootCommand.RaiseCanExecuteChanged();
+            ScreenshotCommand.RaiseCanExecuteChanged();
+            ToggleCombinedRecordingCommand.RaiseCanExecuteChanged();
+            SaveReplayCommand.RaiseCanExecuteChanged();
+            SaveGifCommand.RaiseCanExecuteChanged();
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // CONNECT / DISCONNECT
+        // ─────────────────────────────────────────────────────────────
+        private async Task ToggleConnectAsync()
+        {
+            if (IsConnected)
+            {
+                if (Confirm?.Invoke(
+                        "This will stop all GStreamer streams on the DS and close the SSH connection.\n\nAre you sure?",
+                        "Confirm Disconnect") != true)
+                    return;
+                await DisconnectAsync();
+                return;
+            }
+
+            CancelAutoReconnect();
+
+            string ip = DeviceIp.Trim();
+            if (string.IsNullOrEmpty(ip))
+            {
+                AppendLog("Enter a device IP address first.", true);
+                return;
+            }
+            if (!int.TryParse(SshPortText.Trim(), out int port) || port < 1 || port > 65535)
+            {
+                AppendLog("Port must be a number between 1 and 65535.", true);
+                return;
+            }
+
+            // Credentials, in preference order: DPAPI-saved → this session's
+            // last-used → prompt the user.
+            string user, pass;
+            bool usedSaved = false;
+            _pendingRemember = false;
+
+            string? savedPass =
+                Settings.RememberCredentials && !string.IsNullOrEmpty(Settings.ProtectedPassword)
+                    ? CredentialStore.Unprotect(Settings.ProtectedPassword!)
+                    : null;
+
+            if (savedPass != null)
+            {
+                user = Settings.SshUsername;
+                pass = savedPass;
+                usedSaved = true;
+            }
+            else if (_sessionCreds != null)
+            {
+                (user, pass) = _sessionCreds.Value;
+            }
+            else
+            {
+                var creds = PromptCredentials?.Invoke(Settings.SshUsername);
+                if (creds == null) return;
+                (user, pass, _pendingRemember) = creds.Value;
+            }
+
+            string localIp = GetLocalIpAddress();
+            if (localIp == "127.0.0.1")
+            {
+                AppendLog("Could not detect local IP. Are you on a network?", true);
+                return;
+            }
+
+            bool ok = await ConnectCoreAsync(ip, port, user, pass, localIp, isReconnect: false);
+
+            if (!ok && usedSaved && _ssh.LastFailureWasAuth)
+            {
+                ForgetSavedCredentials(silent: true);
+                _sessionCreds = null;
+                AppendLog("Saved credentials were rejected and have been cleared — click Connect to enter new ones.", true);
+            }
+        }
+
+        /// <summary>Shared by manual connect and the auto-reconnect loop.</summary>
+        private async Task<bool> ConnectCoreAsync(
+            string ip, int port, string user, string pass, string localIp, bool isReconnect)
+        {
+            Connection = ConnectionState.Connecting;
+
+            if (!isReconnect)
+            {
+                _topTracker.Reset();
+                _bottomTracker.Reset();
+                Top.Health = StreamHealth.Waiting;
+                Bottom.Health = StreamHealth.Waiting;
+            }
+
+            try
+            {
+                StartReceivers();   // idempotent — already-running receivers are kept
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"Receiver init failed: {ex.Message}", true);
+                StopReceivers();
+                Connection = ConnectionState.Disconnected;
+                return false;
+            }
+
+            _connectCts = new CancellationTokenSource();
+            bool ok;
+            try
+            {
+                ok = await _ssh.ConnectAsync(ip, port, user, pass, localIp, _connectCts.Token);
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"Connect exception: {ex.Message}", true);
+                ok = false;
+            }
+
+            if (!ok)
+            {
+                if (isReconnect)
+                {
+                    // Keep receivers alive between retries — the device may
+                    // still be streaming even though the SSH link dropped.
+                    Connection = ConnectionState.Lost;
+                }
+                else
+                {
+                    StopReceivers();
+                    Connection = ConnectionState.Disconnected;
+                }
+                return false;
+            }
+
+            Connection = ConnectionState.Connected;
+            _sessionCreds = (user, pass);
+            _healthTimer.Start();
+
+            if (isReconnect)
+            {
+                // The connect sequence restarted the device pipelines, so give
+                // the trackers a grace window before freeze detection resumes.
+                _topTracker.NotifyManualRestart();
+                _bottomTracker.NotifyManualRestart();
+            }
+
+            Settings.DeviceIp = ip;
+            Settings.SshPort = port;
+            Settings.SshUsername = user;
+            if (_pendingRemember)
+            {
+                _pendingRemember = false;
+                string? cipher = CredentialStore.Protect(pass);
+                if (cipher != null)
+                {
+                    Settings.RememberCredentials = true;
+                    Settings.ProtectedPassword = cipher;
+                    AppendLog("Credentials saved for this PC (DPAPI-encrypted).");
+                }
+                else
+                {
+                    AppendLog("Could not encrypt credentials — not saved.", true);
+                }
+            }
+            _settingsService.Save();
+
+            StartReplayAudioTap();
+
+            AppendLog($"Connected to {ip}. Video via RTP. Audio: connect 3.5mm and click ▶ Audio.");
+            if (!Log.IsOpen) Log.IsOpen = true;
+            return true;
+        }
+
+        // ── Auto-reconnect with backoff ───────────────────────────────
+        private void StartAutoReconnect()
+        {
+            if (_sessionCreds == null) return;
+            CancelAutoReconnect();
+            var cts = new CancellationTokenSource();
+            _reconnectCts = cts;
+            _ = RunAutoReconnectAsync(cts.Token);
+        }
+
+        private async Task RunAutoReconnectAsync(CancellationToken ct)
+        {
+            int[] delaysSec = { 3, 6, 12, 24, 30 };
+            for (int attempt = 0; attempt < delaysSec.Length; attempt++)
+            {
+                AppendLog($"[SSH] Reconnecting in {delaysSec[attempt]}s (attempt {attempt + 1}/{delaysSec.Length})...");
+                try
+                {
+                    await Task.Delay(delaysSec[attempt] * 1000, ct);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                if (ct.IsCancellationRequested || Connection == ConnectionState.Connected) return;
+
+                var creds = _sessionCreds;
+                if (creds == null) return;
+                if (!int.TryParse(SshPortText.Trim(), out int port)) return;
+
+                string localIp = GetLocalIpAddress();
+                if (localIp == "127.0.0.1") continue;
+
+                bool ok = await ConnectCoreAsync(
+                    DeviceIp.Trim(), port, creds.Value.User, creds.Value.Pass, localIp,
+                    isReconnect: true);
+                if (ok)
+                {
+                    AppendLog("[SSH] Reconnected.");
+                    return;
+                }
+                if (ct.IsCancellationRequested) return;
+                if (_ssh.LastFailureWasAuth)
+                {
+                    ForgetSavedCredentials(silent: true);
+                    _sessionCreds = null;
+                    AppendLog("[SSH] Credentials rejected during reconnect — stopped retrying.", true);
+                    return;
+                }
+            }
+            AppendLog("[SSH] Auto-reconnect failed — click Reconnect to try again.", true);
+        }
+
+        private void CancelAutoReconnect()
+        {
+            _reconnectCts?.Cancel();
+            _reconnectCts?.Dispose();
+            _reconnectCts = null;
+        }
+
+        private void ForgetSavedCredentials(bool silent)
+        {
+            Settings.RememberCredentials = false;
+            Settings.ProtectedPassword = null;
+            _settingsService.Save();
+            if (!silent) AppendLog("Saved credentials cleared.");
+        }
+
+        public async Task DisconnectAsync()
+        {
+            CancelAutoReconnect();
+            _connectCts?.Cancel();
+            _connectCts?.Dispose();
+            _connectCts = null;
+
+            StopReplayAudioTap();
+            _audioReplay.Clear();
+
+            _healthTimer.Stop();
+            await StopCombinedRecordingAsync();
+            await Top.StopRecordingAsync();
+            await Bottom.StopRecordingAsync();
+            StopReceivers();
+            await _ssh.DisconnectAsync();
+
+            _topReplay.Clear();
+            _bottomReplay.Clear();
+            _topTracker.Reset();
+            _bottomTracker.Reset();
+            Top.Health = StreamHealth.Waiting;
+            Bottom.Health = StreamHealth.Waiting;
+            Top.FpsText = string.Empty;
+            Bottom.FpsText = string.Empty;
+            Top.ClearFrame();
+            Bottom.ClearFrame();
+
+            Connection = ConnectionState.Disconnected;
+            AppendLog("Disconnected — streams stopped on device.");
+        }
+
+        private void OnConnectionLost()
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (Connection != ConnectionState.Connected) return;
+                AppendLog("[SSH] Connection lost.", true);
+                _healthTimer.Stop();
+                Connection = ConnectionState.Lost;
+                Top.Health = StreamHealth.Frozen;
+                Bottom.Health = StreamHealth.Frozen;
+                StartAutoReconnect();
+            });
+        }
+
+        private void StartReceivers()
+        {
+            Top.Receiver.Start();
+            if (IsSingleScreenDevice)
+            {
+                _renderTimer.Start();
+                AppendLog("UDP receiver open on port 5000. Waiting for frames...");
+                return;
+            }
+
+            Bottom.Receiver.Start();
+            _renderTimer.Start();
+            AppendLog("UDP receivers open on ports 5000 / 5001. Waiting for frames...");
+        }
+
+        private void StopReceivers()
+        {
+            _renderTimer.Stop();
+            Top.Receiver.Stop();
+            Bottom.Receiver.Stop();
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // STREAM HEALTH / RESTARTS
+        // ─────────────────────────────────────────────────────────────
+        private void HealthTick()
+        {
+            if (!IsConnected || !_ssh.IsConnected) return;
+
+            _topTracker.Tick();
+            _bottomTracker.Tick();
+            Top.Health = _topTracker.Health;
+            Bottom.Health = _bottomTracker.Health;
+
+            Top.FpsText = Top.Health == StreamHealth.Live
+                ? $"{Top.Receiver.CurrentFps:F0} fps" : string.Empty;
+            Bottom.FpsText = Bottom.Health == StreamHealth.Live
+                ? $"{Bottom.Receiver.CurrentFps:F0} fps" : string.Empty;
+
+            UpdateStats(Top, ref _topStatPrev);
+            UpdateStats(Bottom, ref _bottomStatPrev);
+
+            var now = DateTime.UtcNow;
+            UpdateRecIndicator(Top, now);
+            UpdateRecIndicator(Bottom, now);
+        }
+
+        private void UpdateRecIndicator(ScreenViewModel screen, DateTime nowUtc)
+        {
+            if (IsCombinedRecording)
+                screen.RecText = "● REC " + FormatElapsed(nowUtc - _combinedStartUtc);
+            else if (screen.IsRecording)
+                screen.RecText = "● REC " + FormatElapsed(nowUtc - screen.RecordingStartUtc);
+            else if (screen.RecText.Length != 0)
+                screen.RecText = string.Empty;
+        }
+
+        private static string FormatElapsed(TimeSpan t) =>
+            t.TotalHours >= 1
+                ? $"{(int)t.TotalHours}:{t.Minutes:D2}:{t.Seconds:D2}"
+                : $"{t.Minutes:D2}:{t.Seconds:D2}";
+
+        private Task RestartStreamCoreAsync(ScreenId screen)
+            => _ssh.RestartStreamAsync(screen);
+
+        private async Task ManualRestartAsync(ScreenId screen)
+        {
+            if (!IsConnected) return;
+            AppendLog($"[MANUAL] Restarting {(screen == ScreenId.Top ? "top" : "bottom")} stream...");
+            (screen == ScreenId.Top ? _topTracker : _bottomTracker).NotifyManualRestart();
+            await RestartStreamCoreAsync(screen);
+        }
+
+        private async Task ManualRestartAllAsync()
+        {
+            if (!IsConnected) return;
+            AppendLog("[MANUAL] Restarting ALL streams...");
+            _topTracker.NotifyManualRestart();
+            _bottomTracker.NotifyManualRestart();
+            await RestartStreamCoreAsync(ScreenId.Top);
+            await RestartStreamCoreAsync(ScreenId.Bottom);
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // COMBINED RECORDING (both screens + audio, one MP4)
+        // ─────────────────────────────────────────────────────────────
+        private async Task ToggleCombinedRecordingAsync()
+        {
+            if (_combined != null)
+            {
+                await StopCombinedRecordingAsync();
+                return;
+            }
+
+            var session = CombinedRecordingService.Start(
+                Top.Receiver, Bottom.Receiver,
+                Audio.SelectedInput?.Id, AppendLog);
+            if (session == null) return;
+
+            session.Failed += OnCombinedRecordingFailed;
+            _combined = session;
+            _combinedStartUtc = DateTime.UtcNow;
+            IsCombinedRecording = true;
+        }
+
+        private async Task StopCombinedRecordingAsync()
+        {
+            var session = _combined;
+            _combined = null;
+            if (session != null)
+            {
+                session.Failed -= OnCombinedRecordingFailed;
+                await session.StopAsync();
+                session.Dispose();
+            }
+            IsCombinedRecording = false;
+
+            var now = DateTime.UtcNow;
+            UpdateRecIndicator(Top, now);
+            UpdateRecIndicator(Bottom, now);
+        }
+
+        private void OnCombinedRecordingFailed()
+        {
+            Dispatcher.UIThread.Post(async () =>
+            {
+                if (_combined == null) return;
+                AppendLog("[RECORD] Combined recording stopped unexpectedly.", true);
+                var session = _combined;
+                _combined = null;
+                IsCombinedRecording = false;
+                session.Failed -= OnCombinedRecordingFailed;
+                await Task.Run(session.Dispose);
+            });
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // INSTANT REPLAY
+        // ─────────────────────────────────────────────────────────────
+        private async Task SaveReplayAsync()
+        {
+            if (!IsConnected) return;
+            await ReplayService.SaveAsync(
+                _topReplay, _bottomReplay, _audioReplay, Settings.ReplaySeconds, AppendLog);
+        }
+
+        private async Task SaveGifClipAsync()
+        {
+            if (!IsConnected) return;
+            await ReplayService.SaveGifAsync(
+                _topReplay, _bottomReplay,
+                Math.Min(GifSeconds, Settings.ReplaySeconds), AppendLog);
+        }
+
+        /// <summary>
+        /// Keeps an independent Line-In capture running while connected so
+        /// instant replays include audio. Failure degrades to video-only.
+        /// </summary>
+        private void StartReplayAudioTap()
+        {
+            StopReplayAudioTap();
+
+            var device = Audio.SelectedInput;
+            if (device == null)
+            {
+                AppendLog("[REPLAY] No audio input device — replays will be video-only.");
+                return;
+            }
+
+            try
+            {
+                _replayAudioTap = new AudioRecordingTap(device.Id);
+                _replayAudioTap.DataAvailable += _audioReplay.OnPcm;
+            }
+            catch (Exception ex)
+            {
+                _replayAudioTap = null;
+                AppendLog($"[REPLAY] Audio capture unavailable ({ex.Message}) — replays will be video-only.", true);
+            }
+        }
+
+        private void StopReplayAudioTap()
+        {
+            if (_replayAudioTap == null) return;
+            _replayAudioTap.DataAvailable -= _audioReplay.OnPcm;
+            _replayAudioTap.Dispose();
+            _replayAudioTap = null;
+        }
+
+        private void SetReplayLength(object? parameter)
+        {
+            if (!int.TryParse(parameter?.ToString(), out int seconds)) return;
+
+            Settings.ReplaySeconds = seconds;
+            _topReplay.CapacitySeconds = seconds;
+            _bottomReplay.CapacitySeconds = seconds;
+            _audioReplay.CapacitySeconds = seconds;
+            _settingsService.Save();
+
+            OnPropertyChanged(nameof(ReplaySeconds));
+            OnPropertyChanged(nameof(IsReplay15));
+            OnPropertyChanged(nameof(IsReplay30));
+            OnPropertyChanged(nameof(IsReplay60));
+            OnPropertyChanged(nameof(IsReplay120));
+            AppendLog($"[REPLAY] Buffer length set to {seconds} seconds.");
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // DISPLAY PREFERENCES (swap / gap / rotation / filter)
+        // ─────────────────────────────────────────────────────────────
+        private void ToggleSwap()
+        {
+            Settings.SwapScreens = !Settings.SwapScreens;
+            _settingsService.Save();
+            OnPropertyChanged(nameof(IsSwapped));
+        }
+
+        private void SetScreenGap(object? parameter)
+        {
+            if (!int.TryParse(parameter?.ToString(), out int gap)) return;
+            Settings.ScreenGap = gap;
+            _settingsService.Save();
+            OnPropertyChanged(nameof(ScreenGap));
+            OnPropertyChanged(nameof(IsGapNone));
+            OnPropertyChanged(nameof(IsGapSmall));
+            OnPropertyChanged(nameof(IsGapNormal));
+            OnPropertyChanged(nameof(IsGapWide));
+        }
+
+        private void SetRotation(object? parameter)
+        {
+            if (!int.TryParse(parameter?.ToString(), out int degrees)) return;
+            if (degrees is not (0 or 90 or 180 or 270)) return;
+            Settings.Rotation = degrees;
+            _settingsService.Save();
+            OnPropertyChanged(nameof(RotationAngle));
+            OnPropertyChanged(nameof(IsRotation0));
+            OnPropertyChanged(nameof(IsRotation90));
+            OnPropertyChanged(nameof(IsRotation180));
+            OnPropertyChanged(nameof(IsRotation270));
+        }
+
+        private void SetScaling(object? parameter)
+        {
+            Settings.SmoothScaling = parameter?.ToString() == "Smooth";
+            _settingsService.Save();
+            OnPropertyChanged(nameof(ScalingMode));
+            OnPropertyChanged(nameof(IsScalingSharp));
+            OnPropertyChanged(nameof(IsScalingSmooth));
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // QUALITY PRESET / STATS OVERLAY
+        // ─────────────────────────────────────────────────────────────
+        private async Task SetQualityAsync(object? parameter)
+        {
+            if (!Enum.TryParse(parameter?.ToString(), out StreamQuality quality)) return;
+            if (quality == CurrentQuality) return;
+
+            Settings.Quality = quality.ToString();
+            _ssh.VideoBitrateBps = QualityToBps(quality);
+            _settingsService.Save();
+
+            OnPropertyChanged(nameof(IsQualityLow));
+            OnPropertyChanged(nameof(IsQualityMedium));
+            OnPropertyChanged(nameof(IsQualityHigh));
+
+            double mbps = QualityToBps(quality) / 1_000_000.0;
+            if (IsConnected)
+            {
+                AppendLog($"[QUALITY] {quality} ({mbps:F0} Mbps per screen) — restarting streams...");
+                await ManualRestartAllAsync();
+            }
+            else
+            {
+                AppendLog($"[QUALITY] {quality} ({mbps:F0} Mbps per screen) — takes effect on next connect.");
+            }
+        }
+
+        private void ToggleStats()
+        {
+            Settings.ShowStats = !Settings.ShowStats;
+            _settingsService.Save();
+            OnPropertyChanged(nameof(IsStatsVisible));
+            if (!Settings.ShowStats)
+            {
+                Top.StatsText = string.Empty;
+                Bottom.StatsText = string.Empty;
+            }
+        }
+
+        private void UpdateStats(ScreenViewModel screen, ref (long P, long L, long B) prev)
+        {
+            var (packets, lost, bytes) = screen.Receiver.GetStats();
+            long dp = packets - prev.P;
+            long dl = lost - prev.L;
+            long db = bytes - prev.B;
+            prev = (packets, lost, bytes);
+
+            if (!Settings.ShowStats)
+            {
+                if (screen.StatsText.Length != 0) screen.StatsText = string.Empty;
+                return;
+            }
+
+            if (dp + dl <= 0)
+            {
+                screen.StatsText = "no data";
+                return;
+            }
+
+            double lossPct = 100.0 * dl / (dp + dl);
+            double mbps = db * 8 / 1_000_000.0;
+            screen.StatsText = $"{mbps:F1} Mbps · {lossPct:F1}% loss";
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // CONSOLE POWER
+        // ─────────────────────────────────────────────────────────────
+        private async Task ShutdownConsoleAsync()
+        {
+            if (Confirm?.Invoke("Shut down the console?", "Shutdown Console") != true) return;
+            AppendLog("[POWER] Shutdown command sent.", true);
+            await _ssh.ShutdownConsoleAsync();
+            await Task.Delay(1000);
+            await DisconnectAsync();
+        }
+
+        private async Task RebootConsoleAsync()
+        {
+            if (Confirm?.Invoke("Reboot the console?", "Reboot Console") != true) return;
+            AppendLog("[POWER] Reboot command sent.", true);
+            await _ssh.RebootConsoleAsync();
+            await Task.Delay(1000);
+            await DisconnectAsync();
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // SCREENSHOT / THEME
+        // ─────────────────────────────────────────────────────────────
+        private void TakeScreenshot()
+        {
+            try
+            {
+                int saved = ScreenshotService.SaveAll(Top.Bitmap, Bottom.Bitmap);
+                AppendLog(saved > 0
+                    ? $"[SCREENSHOT] {saved} image(s) → {AppPaths.ScreenshotsDir}"
+                    : "[SCREENSHOT] No frames to capture yet.");
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"[SCREENSHOT] Failed: {ex.Message}", true);
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // SHUTDOWN
+        // ─────────────────────────────────────────────────────────────
+        /// <summary>
+        /// Stops everything and closes the SSH link. The window asks for
+        /// confirmation first (it checks <see cref="IsConnected"/> itself);
+        /// by the time this runs, the user has already agreed to exit.
+        /// </summary>
+        public async Task ShutdownAsync()
+        {
+            CancelAutoReconnect();
+            _connectCts?.Cancel();
+            _healthTimer.Stop();
+            _renderTimer.Stop();
+            Timer.Shutdown();
+            StopReplayAudioTap();
+
+            await StopCombinedRecordingAsync();
+            await Top.StopRecordingAsync();
+            await Bottom.StopRecordingAsync();
+            Audio.Stop();
+            StopReceivers();
+            await _ssh.DisconnectAsync();
+
+            Top.Dispose();
+            Bottom.Dispose();
+            Audio.Dispose();
+            _ssh.Dispose();
+
+            Settings.DeviceIp = DeviceIp.Trim();
+            if (int.TryParse(SshPortText.Trim(), out int port)) Settings.SshPort = port;
+            _settingsService.Save();
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        private void AppendLog(string message, bool isError = false)
+        {
+            Log.Append(message, isError);
+
+            if (!Dispatcher.UIThread.CheckAccess())
+            {
+                Dispatcher.UIThread.Post(() => SetStatus(message, isError));
+                return;
+            }
+            SetStatus(message, isError);
+        }
+
+        private void SetStatus(string message, bool isError)
+        {
+            StatusMessage = message;
+            StatusIsError = isError;
+        }
+
+        private static string GetLocalIpAddress()
+        {
+            try
+            {
+                // Find the first active, non-loopback IPv4 interface.
+                // This avoids any external network calls.
+                foreach (var iface in NetworkInterface.GetAllNetworkInterfaces())
+                {
+                    if (iface.OperationalStatus != OperationalStatus.Up) continue;
+                    if (iface.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
+
+                    var info = iface.GetIPProperties();
+                    var ipv4 = info.UnicastAddresses
+                        .FirstOrDefault(a => a.Address.AddressFamily == AddressFamily.InterNetwork);
+
+                    if (ipv4 != null) return ipv4.Address.ToString();
+                }
+
+                return "127.0.0.1";
+            }
+            catch
+            {
+                return "127.0.0.1";
+            }
+        }
+
+        private static IBrush Swatch(byte r, byte g, byte b) =>
+            new ImmutableSolidColorBrush(Color.FromRgb(r, g, b));
+    }
+}
