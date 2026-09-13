@@ -15,6 +15,12 @@
 #
 set -euo pipefail
 
+# Avalonia's build task phones home. A Flatpak build is meant to be offline,
+# so without this every build spends time on connections that cannot succeed.
+# This is the environment variable the build task reads; the MSBuild property
+# that looks like it should do the same is not referenced by the package.
+export AVALONIA_TELEMETRY_OPTOUT=1
+
 APP_ID="io.github.zyphusx.RGDSCapture"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"

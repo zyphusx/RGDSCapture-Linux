@@ -25,10 +25,6 @@
     <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
     <InvariantGlobalization>true</InvariantGlobalization>
 
-    <!-- Avalonia's build task reports telemetry over the network. A Flatpak
-         is built offline, so leaving it on means a batch of failed
-         connections on every build. -->
-    <AvaloniaBuildTelemetryOptOut>true</AvaloniaBuildTelemetryOptOut>
   </PropertyGroup>
 
   <ItemGroup>
