@@ -6,6 +6,7 @@ publish/
 
 # Flatpak build artefacts
 .flatpak-builder/
+packaging/flatpak/.*.generated.yml
 build-dir/
 repo/
 *.flatpak

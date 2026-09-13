@@ -44,26 +44,40 @@ need curl
 need sha256sum
 
 # ── FFmpeg tarball checksum ───────────────────────────────────────────
-# The manifest ships with a placeholder, because the machine the Linux
-# port was written on could not reach ffmpeg.org and a guessed checksum
-# fails the build looking like corruption. Fill it in on first run.
-MANIFEST="$HERE/$APP_ID.yml"
+# The manifest ships a placeholder sha256: the machine the Linux port was
+# written on could not reach ffmpeg.org, and a guessed checksum fails the
+# build looking like a corrupt download.
+#
+# The real value is resolved here and written to a GENERATED copy of the
+# manifest, never to the tracked one. Writing it back into the tracked file
+# is the obvious shortcut and it breaks `git pull`: the working tree is dirty
+# from then on, so the next pull refuses to merge and quietly leaves the user
+# building a stale manifest. The copy lives beside the original so that the
+# relative source paths inside it still resolve.
+MANIFEST_SRC="$HERE/$APP_ID.yml"
+MANIFEST="$HERE/.$APP_ID.generated.yml"
 PLACEHOLDER="0000000000000000000000000000000000000000000000000000000000000000"
+SUMFILE="$ROOT/.flatpak-builder/ffmpeg.sha256"
 
-if grep -q "sha256: $PLACEHOLDER" "$MANIFEST"; then
-    FFMPEG_URL="$(grep -oP 'url: \K\S+ffmpeg-[0-9.]+\.tar\.xz' "$MANIFEST")"
+FFMPEG_URL="$(grep -oP 'url: \K\S+ffmpeg-[0-9.]+\.tar\.xz' "$MANIFEST_SRC")"
+
+if [[ -s "$SUMFILE" ]] && [[ "$(head -n1 "$SUMFILE" | cut -d" " -f2-)" == "$FFMPEG_URL" ]]; then
+    SUM="$(head -n1 "$SUMFILE" | cut -d" " -f1)"
+    echo "==> FFmpeg checksum (cached): $SUM"
+else
     echo "==> Fetching the FFmpeg checksum (one time)"
     echo "    $FFMPEG_URL"
-
-    TARBALL="$(mktemp -d)/$(basename "$FFMPEG_URL")"
-    curl --fail --location --progress-bar --output "$TARBALL" "$FFMPEG_URL"
-    SUM="$(sha256sum "$TARBALL" | cut -d" " -f1)"
-    rm -rf "$(dirname "$TARBALL")"
-
-    sed -i "s|sha256: $PLACEHOLDER|sha256: $SUM|" "$MANIFEST"
+    TMPDIR_DL="$(mktemp -d)"
+    curl --fail --location --progress-bar \
+         --output "$TMPDIR_DL/$(basename "$FFMPEG_URL")" "$FFMPEG_URL"
+    SUM="$(sha256sum "$TMPDIR_DL/$(basename "$FFMPEG_URL")" | cut -d" " -f1)"
+    rm -rf "$TMPDIR_DL"
+    mkdir -p "$(dirname "$SUMFILE")"
+    echo "$SUM $FFMPEG_URL" > "$SUMFILE"
     echo "    -> $SUM"
-    echo "    written into the manifest; commit it so this only happens once."
 fi
+
+sed "s|sha256: $PLACEHOLDER|sha256: $SUM|" "$MANIFEST_SRC" > "$MANIFEST"
 
 echo "==> Installing the Flatpak runtime and SDK"
 flatpak install --user --noninteractive --or-update flathub \
@@ -85,14 +99,14 @@ cd "$HERE"
 rm -rf build-dir
 flatpak-builder --user --install --force-clean \
     --state-dir "$ROOT/.flatpak-builder" \
-    build-dir "$APP_ID.yml"
+    build-dir "$MANIFEST"
 
 if [[ "${1:-}" == "--bundle" ]]; then
     echo "==> Writing $APP_ID.flatpak"
     rm -rf repo
     flatpak-builder --repo=repo --force-clean \
         --state-dir "$ROOT/.flatpak-builder" \
-        build-dir "$APP_ID.yml"
+        build-dir "$MANIFEST"
     flatpak build-bundle repo "$ROOT/$APP_ID.flatpak" "$APP_ID"
     echo "    -> $ROOT/$APP_ID.flatpak"
 fi
