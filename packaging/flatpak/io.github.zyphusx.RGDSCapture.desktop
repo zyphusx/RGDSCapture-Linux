@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=RGDSCapture
+GenericName=Handheld Capture Card
+Comment=Stream, record and monitor both screens of an Anbernic RG Dual Screen
+Exec=rgdscapture
+Icon=io.github.zyphusx.RGDSCapture
+Terminal=false
+Categories=AudioVideo;Video;Recorder;
+Keywords=capture;anbernic;rgds;rg353v;stream;record;retro;handheld;
+StartupWMClass=rgdscapture

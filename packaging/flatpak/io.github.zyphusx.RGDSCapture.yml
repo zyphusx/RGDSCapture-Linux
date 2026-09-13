@@ -1,0 +1,118 @@
+# RGDSCapture — Flatpak manifest
+#
+# Build with packaging/flatpak/build.sh, which publishes the .NET app first
+# and then runs flatpak-builder over this file. The app is NOT built inside
+# the sandbox: it is published self-contained beforehand, so the runtime
+# needs no .NET extension and the sandboxed build stays offline.
+#
+# FFmpeg is built here rather than taken from the runtime. FFmpeg.AutoGen
+# 9.0.1.1 binds specific sonames (libavcodec.so.63, libavutil.so.61,
+# libswscale.so.10, libswresample.so.7), and no freedesktop runtime — nor the
+# ffmpeg-full extension — ships that generation. A mismatch fails to load
+# rather than mis-binding, so pinning it here is what makes the decoder work
+# at all.
+
+app-id: io.github.zyphusx.RGDSCapture
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+command: rgdscapture
+
+finish-args:
+  # Display. Wayland where available, X11 otherwise.
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+
+  # The device is reached over SSH, and both screens arrive as RTP on
+  # UDP 5000/5001, so unrestricted networking is the whole point of the app.
+  - --share=network
+
+  # Line-in monitoring and recording. PipeWire serves this through its
+  # PulseAudio compatibility socket.
+  - --socket=pulseaudio
+
+  # Saved SSH passwords live in the login keyring rather than in
+  # settings.json; see Core/CredentialStore.cs.
+  - --talk-name=org.freedesktop.secrets
+
+  # Recordings, replays and screenshots are written to the user's own media
+  # folders. Nothing else on the host is visible.
+  - --filesystem=xdg-videos
+  - --filesystem=xdg-pictures
+
+modules:
+  # ── FFmpeg 9.0.x, LGPL ──────────────────────────────────────────────
+  # Decode and remux only: the device does the encoding, and recording is
+  # -c:v copy. Nothing here needs --enable-gpl, so the build stays LGPL and
+  # the app stays MIT-distributable.
+  - name: ffmpeg
+    config-opts:
+      - --enable-shared
+      - --disable-static
+      - --disable-programs
+      - --enable-ffmpeg          # recording and GIF export shell out to it
+      - --disable-doc
+      - --disable-debug
+      - --enable-network
+      - --enable-protocol=file,pipe,rtp,udp
+      - --enable-demuxer=h264,rtp,mov,mp4,matroska,image2,wav,pcm_s16le
+      - --enable-muxer=mp4,mov,rtp,gif,image2,wav,pcm_s16le
+      - --enable-decoder=h264,aac,pcm_s16le,gif
+      - --enable-encoder=aac,gif,pcm_s16le
+      - --enable-parser=h264,aac
+      - --enable-bsf=setts,h264_mp4toannexb,extract_extradata
+      - --enable-filter=scale,fps,palettegen,paletteuse,vstack,hstack,setpts,format,split,pad,null,anull,aresample
+      - --enable-swscale
+      - --enable-swresample
+    sources:
+      - type: archive
+        url: https://ffmpeg.org/releases/ffmpeg-9.0.1.tar.xz
+        # UNVERIFIED — fill this in before building. The build environment
+        # this manifest was written in could not reach ffmpeg.org, and a
+        # made-up checksum is worse than an obvious gap. Get the real one:
+        #     curl -O https://ffmpeg.org/releases/ffmpeg-9.0.1.tar.xz
+        #     sha256sum ffmpeg-9.0.1.tar.xz
+        sha256: 0000000000000000000000000000000000000000000000000000000000000000
+    cleanup:
+      - /include
+      - /lib/pkgconfig
+      - /share/ffmpeg/examples
+
+  # ── The application ─────────────────────────────────────────────────
+  - name: rgdscapture
+    buildsystem: simple
+    build-commands:
+      # The publish output is a self-contained .NET app: its own runtime,
+      # the managed assemblies, and the native Avalonia and SkiaSharp
+      # libraries. It goes to /app/lib/rgdscapture with a launcher on PATH,
+      # rather than straight into /app/bin, so ~200 files do not land in a
+      # directory meant for commands.
+      - install -d /app/lib/rgdscapture
+      - cp -a publish/. /app/lib/rgdscapture/
+      - chmod +x /app/lib/rgdscapture/rgdscapture
+      - install -Dm755 rgdscapture.sh /app/bin/rgdscapture
+
+      - install -Dm644 io.github.zyphusx.RGDSCapture.desktop
+          /app/share/applications/io.github.zyphusx.RGDSCapture.desktop
+      - install -Dm644 io.github.zyphusx.RGDSCapture.metainfo.xml
+          /app/share/metainfo/io.github.zyphusx.RGDSCapture.metainfo.xml
+      - |
+        for size in 16 24 32 48 64 128 256; do
+          install -Dm644 "icons/${size}x${size}/io.github.zyphusx.RGDSCapture.png" \
+            "/app/share/icons/hicolor/${size}x${size}/apps/io.github.zyphusx.RGDSCapture.png"
+        done
+    sources:
+      - type: dir
+        path: ../../publish
+        dest: publish
+      - type: file
+        path: rgdscapture.sh
+      - type: file
+        path: io.github.zyphusx.RGDSCapture.desktop
+      - type: file
+        path: io.github.zyphusx.RGDSCapture.metainfo.xml
+      - type: dir
+        path: icons
+        dest: icons
