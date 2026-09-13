@@ -42,11 +42,6 @@ namespace RGDSCapture
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             {
                 desktop.MainWindow = new MainWindow(_vm);
-
-                // The view-model owns SSH sessions, capture threads and open
-                // ffmpeg processes; letting the process exit without unwinding
-                // them leaves pipelines running on the device.
-                desktop.ShutdownRequested += (_, _) => _vm.Dispose();
             }
 
             base.OnFrameworkInitializationCompleted();

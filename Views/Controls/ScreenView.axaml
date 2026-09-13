@@ -1,0 +1,125 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:core="using:RGDSCapture.Core"
+             xmlns:vm="using:RGDSCapture.ViewModels"
+             xmlns:controls="using:RGDSCapture.Views.Controls"
+             x:Class="RGDSCapture.Views.Controls.ScreenView"
+             x:DataType="vm:ScreenViewModel">
+
+    <!-- DataContext: ScreenViewModel. Outer margin (the screen gap) is set
+         on the UserControl itself by MainWindow.ApplyLayout. -->
+
+    <UserControl.Styles>
+        <!-- Glass pill shared by every overlay chip -->
+        <Style Selector="Border.glass-chip">
+            <Setter Property="Background" Value="{DynamicResource ScreenGlassBg}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ScreenGlassBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="8,4"/>
+        </Style>
+
+        <!-- The fullscreen button stays invisible until the panel is
+             hovered. ":pointerover" on the root Border cannot style a
+             descendant in Avalonia, so the hover state is carried down the
+             tree by a selector rooted on the panel itself. -->
+        <Style Selector="Border#Root Button#FullscreenButton">
+            <Setter Property="Opacity" Value="0"/>
+        </Style>
+        <Style Selector="Border#Root:pointerover Button#FullscreenButton">
+            <Setter Property="Opacity" Value="1"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Border Name="Root"
+            Background="{DynamicResource ScreenBg}"
+            BorderBrush="{DynamicResource ScreenBorder}"
+            BorderThickness="1"
+            CornerRadius="10"
+            ClipToBounds="True">
+
+        <Grid>
+            <!-- Placeholder, covered by video once frames arrive -->
+            <StackPanel HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        IsHitTestVisible="False">
+                <TextBlock Text="{Binding DisplayName}"
+                           Foreground="{DynamicResource ScreenLabelFg}"
+                           FontSize="15"
+                           FontWeight="SemiBold"
+                           HorizontalAlignment="Center"/>
+                <TextBlock Text="no signal"
+                           Foreground="{DynamicResource ScreenLabelFg}"
+                           FontSize="11"
+                           Opacity="0.75"
+                           Margin="0,4,0,0"
+                           HorizontalAlignment="Center"/>
+            </StackPanel>
+
+            <controls:VideoSurface Name="Video"
+                                   Source="{Binding Bitmap}"
+                                   AutomationProperties.Name="{Binding DisplayName}"/>
+
+            <!-- Health + FPS + optional network stats, top-left -->
+            <StackPanel HorizontalAlignment="Left"
+                        VerticalAlignment="Top"
+                        Margin="10"
+                        IsHitTestVisible="False">
+
+                <Border Classes="glass-chip" HorizontalAlignment="Left">
+                    <StackPanel Orientation="Horizontal">
+                        <!-- BadgeText already carries its own ●/○ glyph -->
+                        <TextBlock Text="{Binding BadgeText}"
+                                   Foreground="{Binding BadgeBrush}"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding FpsText}"
+                                   Foreground="#C8FFFFFF"
+                                   FontSize="11"
+                                   VerticalAlignment="Center"
+                                   Margin="8,0,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="glass-chip"
+                        HorizontalAlignment="Left"
+                        Margin="0,6,0,0"
+                        IsVisible="{Binding StatsText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                    <TextBlock Text="{Binding StatsText}"
+                               Foreground="#DDFFFFFF"
+                               FontSize="11"
+                               FontFamily="Cascadia Code,Consolas,monospace"
+                               AutomationProperties.Name="Network stats"/>
+                </Border>
+            </StackPanel>
+
+            <!-- Recording indicator, top-right beneath the fullscreen button -->
+            <Border Classes="glass-chip"
+                    Margin="0,46,10,0"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    ZIndex="5"
+                    IsHitTestVisible="False"
+                    IsVisible="{Binding RecText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                <TextBlock Text="{Binding RecText}"
+                           Foreground="{DynamicResource DangerFgSolid}"
+                           FontSize="11"
+                           FontWeight="Bold"
+                           FontFamily="Cascadia Code,Consolas,monospace"
+                           AutomationProperties.Name="Recording indicator"/>
+            </Border>
+
+            <!-- Fullscreen button — dimmed until the screen is hovered -->
+            <Button Name="FullscreenButton"
+                    Classes="overlay"
+                    Content="⛶"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Margin="0,10,10,0"
+                    ZIndex="5"
+                    AutomationProperties.Name="Full screen"
+                    ToolTip.Tip="{Binding DisplayName, StringFormat='Full screen — {0}'}"/>
+        </Grid>
+    </Border>
+</UserControl>
