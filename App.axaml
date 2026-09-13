@@ -1,0 +1,25 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="RGDSCapture.App"
+             RequestedThemeVariant="Dark">
+
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- Index 0 is the theme color dictionary; ThemeService swaps
+                     it at runtime. Dark.axaml is only the design-time and
+                     pre-startup fallback. -->
+                <ResourceInclude Source="/Themes/Dark.axaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+
+    <!-- Control styles are Styles, not Resources, so unlike the WPF build
+         they are a sibling of the palette rather than a second merged
+         dictionary beside it. -->
+    <Application.Styles>
+        <FluentTheme/>
+        <StyleInclude Source="/Themes/Controls.axaml"/>
+    </Application.Styles>
+
+</Application>
