@@ -1,0 +1,265 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:RGDSCapture.ViewModels"
+        x:Class="RGDSCapture.Views.ThemeDialog"
+        x:DataType="vm:MainViewModel"
+        Title="Theme"
+        Width="560"
+        SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        SystemDecorations="None"
+        TransparencyLevelHint="Transparent"
+        ShowInTaskbar="False"
+        Background="Transparent"
+        FontFamily="Inter,Cantarell,Noto Sans,sans-serif"
+        FontSize="13"
+        UseLayoutRounding="True">
+
+    <Window.Styles>
+        <!-- One preset tile: a miniature of the theme it applies. -->
+        <Style Selector="Button.theme-tile">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0,0,8,8"/>
+            <Setter Property="Width" Value="120"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtle}"/>
+        </Style>
+
+        <!-- One shelf per group. Horizontal, so a catalog of fifty themes
+             cannot push the dialog taller than the screen; the wheel is
+             remapped to scroll sideways in code-behind. -->
+        <Style Selector="ScrollViewer.tile-shelf">
+            <Setter Property="HorizontalScrollBarVisibility" Value="Auto"/>
+            <Setter Property="VerticalScrollBarVisibility" Value="Disabled"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+            <Setter Property="Focusable" Value="False"/>
+        </Style>
+
+        <Style Selector="Border.tile-caption">
+            <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBg}"/>
+        </Style>
+        <Style Selector="Border.tile-caption.active">
+            <Setter Property="Background" Value="{DynamicResource AccentMuted}"/>
+        </Style>
+        <Style Selector="TextBlock.tile-name">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+        </Style>
+        <Style Selector="TextBlock.tile-name.active">
+            <Setter Property="Foreground" Value="{DynamicResource AccentSubtleFg}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+    </Window.Styles>
+
+    <Window.Resources>
+        <!--
+            Shared by every section. The preview is either a miniature of the
+            app's surfaces, or — for a pride theme — the flag itself, so the
+            tile is recognisable rather than just "a purple one".
+        -->
+        <DataTemplate x:Key="ThemeTileTemplate" x:DataType="vm:ThemeChoice">
+            <Button Classes="theme-tile"
+                    Command="{Binding ApplyCommand}"
+                    ToolTip.Tip="{Binding Name}"
+                    AutomationProperties.Name="{Binding Name}">
+                <StackPanel>
+                    <Grid Height="52">
+                        <!-- Plain theme: surface ground, raised bar, accent dot -->
+                        <Border Background="{Binding SurfaceSwatch}"
+                                CornerRadius="6,6,0,0"
+                                IsVisible="{Binding !HasStripes}">
+                            <Grid Margin="8">
+                                <Border Background="{Binding RaisedSwatch}"
+                                        CornerRadius="3" Height="8"
+                                        VerticalAlignment="Top"
+                                        HorizontalAlignment="Stretch"/>
+                                <Ellipse Fill="{Binding AccentSwatch}"
+                                         Width="16" Height="16"
+                                         HorizontalAlignment="Left"
+                                         VerticalAlignment="Bottom"/>
+                                <Border Background="{Binding TextSwatch}"
+                                        CornerRadius="2" Height="5" Width="42"
+                                        Opacity="0.55"
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Bottom"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Pride theme: the flag -->
+                        <Border Background="{Binding StripeSwatch}"
+                                CornerRadius="6,6,0,0"
+                                IsVisible="{Binding HasStripes}"/>
+                    </Grid>
+
+                    <Border Classes="tile-caption"
+                            Classes.active="{Binding IsActive}"
+                            CornerRadius="0,0,6,6"
+                            Padding="8,6">
+                        <DockPanel LastChildFill="False">
+                            <TextBlock DockPanel.Dock="Left"
+                                       Classes="tile-name"
+                                       Classes.active="{Binding IsActive}"
+                                       Text="{Binding Name}"
+                                       FontSize="12"
+                                       TextTrimming="CharacterEllipsis"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock DockPanel.Dock="Right"
+                                       Text="✓"
+                                       FontSize="12"
+                                       FontWeight="Bold"
+                                       VerticalAlignment="Center"
+                                       Margin="8,0,0,0"
+                                       IsVisible="{Binding IsActive}"
+                                       Foreground="{DynamicResource AccentSubtleFg}"/>
+                        </DockPanel>
+                    </Border>
+                </StackPanel>
+            </Button>
+        </DataTemplate>
+    </Window.Resources>
+
+    <LayoutTransformControl LayoutTransform="{DynamicResource UiScaleTransform}">
+        <Border Background="{DynamicResource SurfaceBg}"
+                BorderBrush="{DynamicResource BorderStrong}"
+                BorderThickness="1"
+                CornerRadius="10"
+                Margin="12"
+                BoxShadow="0 4 28 #73000000">
+
+            <!-- The card is fixed-layout and auto-heights to its content, which
+                 at the larger UI scales is taller than the desktop. The window's
+                 MaxHeight is pinned to the work area (see UiScaleService), so this
+                 scroller is what keeps Apply / Done reachable. -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="22">
+
+                    <!-- Header doubles as the drag handle -->
+                    <Border Name="DragHandle" Background="Transparent" Margin="0,0,0,18">
+                        <DockPanel LastChildFill="False">
+                            <StackPanel DockPanel.Dock="Left">
+                                <TextBlock Text="Theme"
+                                           Foreground="{DynamicResource TextPrimary}"
+                                           FontSize="16" FontWeight="SemiBold"/>
+                                <TextBlock Text="Pick a preset, or set your own accent colour."
+                                           Foreground="{DynamicResource TextSecondary}"
+                                           FontSize="12" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <Button Name="BtnCloseHeader"
+                                    DockPanel.Dock="Right"
+                                    Classes="ghost icon"
+                                    Content="✕"
+                                    VerticalAlignment="Top"
+                                    AutomationProperties.Name="Close"/>
+                        </DockPanel>
+                    </Border>
+
+                    <TextBlock Text="DARK" Classes="section-header"/>
+                    <ScrollViewer Name="ShelfDark" Classes="tile-shelf">
+                        <ItemsControl ItemsSource="{Binding DarkThemes}"
+                                      ItemTemplate="{StaticResource ThemeTileTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <TextBlock Text="LIGHT" Classes="section-header" Margin="0,8,0,10"/>
+                    <ScrollViewer Name="ShelfLight" Classes="tile-shelf">
+                        <ItemsControl ItemsSource="{Binding LightThemes}"
+                                      ItemTemplate="{StaticResource ThemeTileTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <TextBlock Text="PRIDE" Classes="section-header" Margin="0,8,0,10"/>
+                    <ScrollViewer Name="ShelfPride" Classes="tile-shelf">
+                        <ItemsControl ItemsSource="{Binding PrideThemes}"
+                                      ItemTemplate="{StaticResource ThemeTileTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <Border Classes="card-divider" Margin="0,12"/>
+
+                    <!-- ══ Custom accent ═══════════════════════════════════════ -->
+                    <TextBlock Text="CUSTOM ACCENT" Classes="section-header"/>
+                    <Grid ColumnDefinitions="*,16,Auto">
+
+                        <StackPanel Grid.Column="0">
+                            <Grid ColumnDefinitions="18,*,38" Margin="0,0,0,8">
+                                <TextBlock Text="R" Classes="section-label" Margin="0"/>
+                                <Slider Name="SldR" Grid.Column="1" Minimum="0" Maximum="255"
+                                        AutomationProperties.Name="Red"/>
+                                <TextBlock Grid.Column="2"
+                                           Text="{Binding #SldR.Value, StringFormat={}{0:F0}}"
+                                           Classes="value-text"
+                                           HorizontalAlignment="Right"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="18,*,38" Margin="0,0,0,8">
+                                <TextBlock Text="G" Classes="section-label" Margin="0"/>
+                                <Slider Name="SldG" Grid.Column="1" Minimum="0" Maximum="255"
+                                        AutomationProperties.Name="Green"/>
+                                <TextBlock Grid.Column="2"
+                                           Text="{Binding #SldG.Value, StringFormat={}{0:F0}}"
+                                           Classes="value-text"
+                                           HorizontalAlignment="Right"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="18,*,38">
+                                <TextBlock Text="B" Classes="section-label" Margin="0"/>
+                                <Slider Name="SldB" Grid.Column="1" Minimum="0" Maximum="255"
+                                        AutomationProperties.Name="Blue"/>
+                                <TextBlock Grid.Column="2"
+                                           Text="{Binding #SldB.Value, StringFormat={}{0:F0}}"
+                                           Classes="value-text"
+                                           HorizontalAlignment="Right"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2" Width="132">
+                            <Border Name="AccentPreview"
+                                    Height="58"
+                                    CornerRadius="8"
+                                    BorderBrush="{DynamicResource BorderStrong}"
+                                    BorderThickness="1"
+                                    Margin="0,0,0,8"/>
+                            <TextBox Name="TxtHex"
+                                     FontFamily="Cascadia Code,Consolas,monospace"
+                                     TextAlignment="Center"
+                                     AutomationProperties.Name="Accent hex value"
+                                     ToolTip.Tip="Type a #RRGGBB value and press Enter"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
+                        <Button Name="BtnApplyAccent"
+                                Content="Apply Accent"
+                                Classes="accent"
+                                Margin="0,0,8,0"
+                                ToolTip.Tip="Re-tint the current theme around this colour"/>
+                        <Button Name="BtnClearAccent"
+                                Content="Use Preset Accent"
+                                ToolTip.Tip="Drop the custom colour and go back to the preset's own accent"/>
+                        <Button Name="BtnDone"
+                                Content="Done"
+                                Width="92"
+                                HorizontalAlignment="Right"
+                                IsDefault="True"
+                                Margin="8,0,0,0"/>
+                    </StackPanel>
+
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+    </LayoutTransformControl>
+</Window>

@@ -1,0 +1,53 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="RGDSCapture.Views.MessageDialog"
+        Width="420"
+        SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        SystemDecorations="None"
+        TransparencyLevelHint="Transparent"
+        ShowInTaskbar="False"
+        Background="Transparent"
+        FontFamily="Inter,Cantarell,Noto Sans,sans-serif"
+        FontSize="13">
+
+    <!-- Avalonia has no MessageBox, and the WPF build leaned on it for
+         confirmations. A small themed window is both what replaces it and an
+         improvement: the system box never matched the app's chrome. -->
+    <LayoutTransformControl LayoutTransform="{DynamicResource UiScaleTransform}">
+        <Border Background="{DynamicResource SurfaceBg}"
+                BorderBrush="{DynamicResource BorderStrong}"
+                BorderThickness="1"
+                CornerRadius="10"
+                Margin="12"
+                BoxShadow="0 4 28 #73000000">
+
+            <StackPanel Margin="24">
+                <Border Name="DragHandle" Background="Transparent" Margin="0,0,0,14">
+                    <TextBlock Name="TitleText"
+                               Foreground="{DynamicResource TextPrimary}"
+                               FontSize="16"
+                               FontWeight="SemiBold"/>
+                </Border>
+
+                <TextBlock Name="MessageText"
+                           Foreground="{DynamicResource TextSecondary}"
+                           FontSize="12"
+                           TextWrapping="Wrap"
+                           Margin="0,0,0,22"/>
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Name="BtnNo"
+                            Width="92"
+                            IsCancel="True"
+                            Margin="0,0,8,0"/>
+                    <Button Name="BtnYes"
+                            Classes="accent"
+                            Width="92"
+                            IsDefault="True"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </LayoutTransformControl>
+</Window>

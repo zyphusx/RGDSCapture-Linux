@@ -1,0 +1,93 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="RGDSCapture.Views.ConnectDialog"
+        Title="Connect"
+        Width="400"
+        SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        SystemDecorations="None"
+        TransparencyLevelHint="Transparent"
+        ShowInTaskbar="False"
+        Background="Transparent"
+        FontFamily="Inter,Cantarell,Noto Sans,sans-serif"
+        FontSize="13"
+        UseLayoutRounding="True">
+
+    <!-- Borderless card so the dialog matches the main window's chrome.
+         The header doubles as the drag handle (see code-behind).
+
+         The UI-scale transform needs a LayoutTransformControl here: in
+         Avalonia a transform that takes part in layout is a container, not
+         a property on the element. -->
+    <LayoutTransformControl LayoutTransform="{DynamicResource UiScaleTransform}">
+        <Border Background="{DynamicResource SurfaceBg}"
+                BorderBrush="{DynamicResource BorderStrong}"
+                BorderThickness="1"
+                CornerRadius="10"
+                Margin="12"
+                BoxShadow="0 4 28 #73000000">
+
+            <!-- Scrolls if a large UI scale (or a short screen) makes the card
+                 taller than the work area MaxHeight allows. -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="24">
+
+                    <Border Name="DragHandle" Background="Transparent" Margin="0,0,0,20">
+                        <StackPanel>
+                            <TextBlock Text="SSH Credentials"
+                                       Foreground="{DynamicResource TextPrimary}"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"/>
+                            <TextBlock Text="Sign in to the console to start streaming."
+                                       Foreground="{DynamicResource TextSecondary}"
+                                       FontSize="12"
+                                       Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="Username" Classes="field-label"/>
+                    <TextBox Name="TxtUsername" Margin="0,0,0,14"/>
+
+                    <TextBlock Text="Password" Classes="field-label"/>
+                    <!-- Avalonia has no PasswordBox; a TextBox with
+                         PasswordChar is the whole of what it was. -->
+                    <TextBox Name="TxtPassword"
+                             PasswordChar="●"
+                             Margin="0,0,0,16"/>
+
+                    <CheckBox Name="ChkRemember"
+                              Content="Remember credentials on this device"
+                              FontSize="12"
+                              Margin="0,0,0,14"
+                              ToolTip.Tip="The password is handed to your desktop keyring, where it is encrypted at rest and unreadable while the keyring is locked"/>
+
+                    <!-- Inline rather than a popup: the Windows build raises a
+                         MessageBox for this, which is a lot of ceremony for a
+                         blank field, and Avalonia has no MessageBox anyway. -->
+                    <TextBlock Name="ValidationText"
+                               Foreground="{DynamicResource DangerFgSolid}"
+                               FontSize="12"
+                               TextWrapping="Wrap"
+                               IsVisible="False"
+                               Margin="0,0,0,10"/>
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Name="BtnCancel"
+                                Content="Cancel"
+                                Width="92"
+                                IsCancel="True"
+                                Margin="0,0,8,0"/>
+                        <Button Name="BtnConnect"
+                                Content="Connect"
+                                Width="92"
+                                Classes="accent"
+                                IsDefault="True"/>
+                    </StackPanel>
+
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+    </LayoutTransformControl>
+</Window>
