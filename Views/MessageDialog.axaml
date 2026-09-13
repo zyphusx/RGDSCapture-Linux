@@ -18,7 +18,7 @@
         <Border Background="{DynamicResource SurfaceBg}"
                 BorderBrush="{DynamicResource BorderStrong}"
                 BorderThickness="1"
-                CornerRadius="10"
+                CornerRadius="12"
                 Margin="12"
                 BoxShadow="0 4 28 #73000000">
 

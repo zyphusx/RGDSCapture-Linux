@@ -121,7 +121,7 @@
         <Border Background="{DynamicResource SurfaceBg}"
                 BorderBrush="{DynamicResource BorderStrong}"
                 BorderThickness="1"
-                CornerRadius="10"
+                CornerRadius="12"
                 Margin="12"
                 BoxShadow="0 4 28 #73000000">
 
@@ -131,10 +131,10 @@
                  scroller is what keeps Apply / Done reachable. -->
             <ScrollViewer VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
-                <StackPanel Margin="20">
+                <StackPanel Margin="24">
 
                     <!-- Header doubles as the drag handle -->
-                    <Border Name="DragHandle" Background="Transparent" Margin="0,0,0,16">
+                    <Border Name="DragHandle" Background="Transparent" Margin="0,0,0,20">
                         <DockPanel LastChildFill="False">
                             <StackPanel DockPanel.Dock="Left">
                                 <TextBlock Text="Theme"
@@ -240,22 +240,25 @@
                         </StackPanel>
                     </Grid>
 
-                    <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                    <!-- A Grid, not a horizontal StackPanel: a StackPanel gives
+                         every child only the width it asks for, so Done could
+                         never actually reach the right edge. -->
+                    <Grid ColumnDefinitions="Auto,8,Auto,*,Auto" Margin="0,20,0,0">
                         <Button Name="BtnApplyAccent"
-                                Content="Apply Accent"
+                                Grid.Column="0"
+                                Content="Apply accent"
                                 Classes="primary"
-                                Margin="0,0,8,0"
                                 ToolTip.Tip="Re-tint the current theme around this colour"/>
                         <Button Name="BtnClearAccent"
-                                Content="Use Preset Accent"
+                                Grid.Column="2"
+                                Content="Use preset accent"
                                 ToolTip.Tip="Drop the custom colour and go back to the preset's own accent"/>
                         <Button Name="BtnDone"
+                                Grid.Column="4"
                                 Content="Done"
                                 Width="92"
-                                HorizontalAlignment="Right"
-                                IsDefault="True"
-                                Margin="8,0,0,0"/>
-                    </StackPanel>
+                                IsDefault="True"/>
+                    </Grid>
 
                 </StackPanel>
             </ScrollViewer>

@@ -8,12 +8,12 @@
         Right column. DataContext: MainViewModel.
         Everything here is "what you do while playing" — capture, replay,
         audio monitoring, the run timer. Setup lives in DevicePanel.
+
+        Spacing is owned by the containers (card-body, field) in
+        Controls.axaml; nothing in here sets a margin between siblings.
     -->
 
     <UserControl.Styles>
-        <!-- The Windows build needs a keyed style per record button, because
-             a DataTrigger can only watch one flag. A style class is bound
-             per-element instead, so one rule covers all three. -->
         <Style Selector="TextBlock.timer">
             <Setter Property="Foreground" Value="{DynamicResource TimerFg}"/>
         </Style>
@@ -26,47 +26,50 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto"
                   HorizontalScrollBarVisibility="Disabled"
                   Padding="12,16">
-        <StackPanel>
+        <StackPanel Spacing="12">
 
             <!-- ══ Record ══════════════════════════════════════════ -->
             <Border Classes="sidebar-card">
-                <StackPanel>
+                <StackPanel Classes="card-body">
                     <TextBlock Text="RECORD" Classes="section-header"/>
 
-                    <Button Classes="record"
-                            Classes.recording="{Binding Top.IsRecording}"
-                            Content="{Binding Top.RecordButtonText}"
-                            Command="{Binding Top.ToggleRecordingCommand}"
-                            IsEnabled="{Binding IsConnected}"
-                            HorizontalAlignment="Stretch"
-                            Margin="0,0,0,4"
-                            AutomationProperties.Name="Record top screen"
-                            ToolTip.Tip="Record top screen to MP4 (no re-encoding)"/>
+                    <!-- The Windows build needs a keyed style per record button,
+                         because a DataTrigger can only watch one flag. A style
+                         class is bound per-element instead, so one rule covers
+                         all three. -->
+                    <StackPanel Spacing="8">
+                        <Button Classes="record"
+                                Classes.recording="{Binding Top.IsRecording}"
+                                Content="{Binding Top.RecordButtonText}"
+                                Command="{Binding Top.ToggleRecordingCommand}"
+                                IsEnabled="{Binding IsConnected}"
+                                HorizontalAlignment="Stretch"
+                                AutomationProperties.Name="Record top screen"
+                                ToolTip.Tip="Record top screen to MP4 (no re-encoding)"/>
 
-                    <Button Classes="record"
-                            Classes.recording="{Binding Bottom.IsRecording}"
-                            Content="{Binding Bottom.RecordButtonText}"
-                            Command="{Binding Bottom.ToggleRecordingCommand}"
-                            IsEnabled="{Binding IsConnectedDualScreen}"
-                            HorizontalAlignment="Stretch"
-                            Margin="0,0,0,4"
-                            AutomationProperties.Name="Record bottom screen"
-                            ToolTip.Tip="Record bottom screen to MP4 (no re-encoding)"/>
+                        <Button Classes="record"
+                                Classes.recording="{Binding Bottom.IsRecording}"
+                                Content="{Binding Bottom.RecordButtonText}"
+                                Command="{Binding Bottom.ToggleRecordingCommand}"
+                                IsEnabled="{Binding IsConnectedDualScreen}"
+                                HorizontalAlignment="Stretch"
+                                AutomationProperties.Name="Record bottom screen"
+                                ToolTip.Tip="Record bottom screen to MP4 (no re-encoding)"/>
 
-                    <Button Classes="record"
-                            Classes.recording="{Binding IsCombinedRecording}"
-                            Content="{Binding CombinedRecordButtonText}"
-                            Command="{Binding ToggleCombinedRecordingCommand}"
-                            HorizontalAlignment="Stretch"
-                            Margin="0,0,0,8"
-                            AutomationProperties.Name="Record combined"
-                            ToolTip.Tip="Record both screens (stacked) + Line-In audio to one MP4"/>
+                        <Button Classes="record"
+                                Classes.recording="{Binding IsCombinedRecording}"
+                                Content="{Binding CombinedRecordButtonText}"
+                                Command="{Binding ToggleCombinedRecordingCommand}"
+                                HorizontalAlignment="Stretch"
+                                AutomationProperties.Name="Record combined"
+                                ToolTip.Tip="Record both screens (stacked) + Line-In audio to one MP4"/>
+                    </StackPanel>
+
+                    <Border Classes="card-divider"/>
 
                     <Button Content="Screenshot"
                             Command="{Binding ScreenshotCommand}"
                             HorizontalAlignment="Stretch"
-                            HorizontalContentAlignment="Left"
-                            FontSize="13" Padding="8,8"
                             AutomationProperties.Name="Take screenshot"
                             ToolTip.Tip="Save a PNG of both screens  (F12)"/>
                 </StackPanel>
@@ -74,98 +77,86 @@
 
             <!-- ══ Instant replay ══════════════════════════════════ -->
             <Border Classes="sidebar-card">
-                <StackPanel>
+                <StackPanel Classes="card-body">
                     <TextBlock Text="INSTANT REPLAY" Classes="section-header"/>
 
-                    <Button Content="◀◀  Save Replay"
-                            Command="{Binding SaveReplayCommand}"
-                            HorizontalAlignment="Stretch"
-                            HorizontalContentAlignment="Left"
-                            FontSize="13" Padding="8,8"
-                            Margin="0,0,0,4"
-                            AutomationProperties.Name="Save instant replay"
-                            ToolTip.Tip="Save the buffered moments of both screens to MP4  (F9)"/>
+                    <Grid ColumnDefinitions="*,8,*">
+                        <Button Grid.Column="0"
+                                Classes="compact"
+                                Content="Save replay"
+                                Command="{Binding SaveReplayCommand}"
+                                HorizontalAlignment="Stretch"
+                                AutomationProperties.Name="Save instant replay"
+                                ToolTip.Tip="Save the buffered moments of both screens to MP4  (F9)"/>
+                        <Button Grid.Column="2"
+                                Classes="compact"
+                                Content="Save GIF"
+                                Command="{Binding SaveGifCommand}"
+                                HorizontalAlignment="Stretch"
+                                AutomationProperties.Name="Save replay as GIF"
+                                ToolTip.Tip="Save the last 10 seconds as an animated GIF  (F10)"/>
+                    </Grid>
 
-                    <Button Content="Save GIF (last 10 s)"
-                            Command="{Binding SaveGifCommand}"
-                            HorizontalAlignment="Stretch"
-                            HorizontalContentAlignment="Left"
-                            FontSize="13" Padding="8,8"
-                            Margin="0,0,0,8"
-                            AutomationProperties.Name="Save replay as GIF"
-                            ToolTip.Tip="Save the last 10 seconds as an animated GIF  (F10)"/>
-
-                    <TextBlock Text="Buffer length" Classes="field-label"/>
-                    <Border Classes="segment-track">
-                        <UniformGrid Rows="1" Columns="4">
-                            <RadioButton Classes="segment"
-                                         GroupName="Replay" Content="15s"
-                                         IsChecked="{Binding IsReplay15, Mode=OneWay}"
-                                         Command="{Binding SetReplayLengthCommand}"
-                                         CommandParameter="15"/>
-                            <RadioButton Classes="segment"
-                                         GroupName="Replay" Content="30s"
-                                         IsChecked="{Binding IsReplay30, Mode=OneWay}"
-                                         Command="{Binding SetReplayLengthCommand}"
-                                         CommandParameter="30"/>
-                            <RadioButton Classes="segment"
-                                         GroupName="Replay" Content="60s"
-                                         IsChecked="{Binding IsReplay60, Mode=OneWay}"
-                                         Command="{Binding SetReplayLengthCommand}"
-                                         CommandParameter="60"/>
-                            <RadioButton Classes="segment"
-                                         GroupName="Replay" Content="120s"
-                                         IsChecked="{Binding IsReplay120, Mode=OneWay}"
-                                         Command="{Binding SetReplayLengthCommand}"
-                                         CommandParameter="120"/>
-                        </UniformGrid>
-                    </Border>
+                    <StackPanel Classes="field">
+                        <TextBlock Text="Buffer length" Classes="field-label"/>
+                        <Border Classes="segment-track">
+                            <UniformGrid Rows="1" Columns="4">
+                                <RadioButton Classes="segment"
+                                             GroupName="Replay" Content="15s"
+                                             IsChecked="{Binding IsReplay15, Mode=OneWay}"
+                                             Command="{Binding SetReplayLengthCommand}"
+                                             CommandParameter="15"/>
+                                <RadioButton Classes="segment"
+                                             GroupName="Replay" Content="30s"
+                                             IsChecked="{Binding IsReplay30, Mode=OneWay}"
+                                             Command="{Binding SetReplayLengthCommand}"
+                                             CommandParameter="30"/>
+                                <RadioButton Classes="segment"
+                                             GroupName="Replay" Content="60s"
+                                             IsChecked="{Binding IsReplay60, Mode=OneWay}"
+                                             Command="{Binding SetReplayLengthCommand}"
+                                             CommandParameter="60"/>
+                                <RadioButton Classes="segment"
+                                             GroupName="Replay" Content="120s"
+                                             IsChecked="{Binding IsReplay120, Mode=OneWay}"
+                                             Command="{Binding SetReplayLengthCommand}"
+                                             CommandParameter="120"/>
+                            </UniformGrid>
+                        </Border>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 
             <!-- ══ Audio ═══════════════════════════════════════════ -->
             <Border Classes="sidebar-card">
-                <StackPanel>
+                <StackPanel Classes="card-body">
                     <TextBlock Text="AUDIO" Classes="section-header"/>
 
-                    <TextBlock Text="Input (Line-In)" Classes="field-label"/>
-                    <ComboBox ItemsSource="{Binding Audio.InputDevices}"
-                              SelectedItem="{Binding Audio.SelectedInput}"
-                              Margin="0,0,0,8"
-                              AutomationProperties.Name="Audio input device"
-                              ToolTip.Tip="Select the Line-In / audio input device"/>
+                    <StackPanel Classes="field">
+                        <TextBlock Text="Input (Line-In)" Classes="field-label"/>
+                        <ComboBox ItemsSource="{Binding Audio.InputDevices}"
+                                  SelectedItem="{Binding Audio.SelectedInput}"
+                                  AutomationProperties.Name="Audio input device"
+                                  ToolTip.Tip="Select the Line-In / audio input device"/>
+                    </StackPanel>
 
-                    <TextBlock Text="Output" Classes="field-label"/>
-                    <ComboBox ItemsSource="{Binding Audio.OutputDevices}"
-                              SelectedItem="{Binding Audio.SelectedOutput}"
-                              Margin="0,0,0,8"
-                              AutomationProperties.Name="Audio output device"
-                              ToolTip.Tip="Select the audio output device"/>
+                    <StackPanel Classes="field">
+                        <TextBlock Text="Output" Classes="field-label"/>
+                        <ComboBox ItemsSource="{Binding Audio.OutputDevices}"
+                                  SelectedItem="{Binding Audio.SelectedOutput}"
+                                  AutomationProperties.Name="Audio output device"
+                                  ToolTip.Tip="Select the audio output device"/>
+                    </StackPanel>
 
-                    <Button Classes.active="{Binding Audio.IsRunning}"
-                            Content="{Binding Audio.ToggleText}"
-                            Command="{Binding Audio.ToggleCommand}"
-                            HorizontalAlignment="Stretch"
-                            Margin="0,0,0,12"
-                            AutomationProperties.Name="Start or stop audio passthrough"
-                            ToolTip.Tip="Start / stop Line-In audio passthrough"/>
-
-                    <!-- Volume + stereo level meters -->
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                            <DockPanel Margin="0,0,0,4" LastChildFill="False">
-                                <TextBlock DockPanel.Dock="Left" Text="Volume"
-                                           Classes="field-label"
-                                           Margin="0"/>
+                    <!-- Volume + stereo level meters. The meters are bottom-aligned
+                         so they sit level with the slider, not the label. -->
+                    <Grid ColumnDefinitions="*,12,Auto,4,Auto">
+                        <StackPanel Grid.Column="0" Classes="field">
+                            <DockPanel>
                                 <TextBlock DockPanel.Dock="Right"
                                            Text="{Binding Audio.VolumeLabel}"
                                            Classes="value-text"/>
+                                <TextBlock Text="Volume" Classes="field-label"/>
                             </DockPanel>
                             <Slider Minimum="0" Maximum="1"
                                     Value="{Binding Audio.Volume}"
@@ -173,13 +164,12 @@
                                     ToolTip.Tip="Output volume"/>
                         </StackPanel>
 
-                        <Border Grid.Column="1"
+                        <Border Grid.Column="2"
                                 Width="8" Height="40"
                                 Background="{DynamicResource VuBg}"
                                 BorderBrush="{DynamicResource VuBorder}"
                                 BorderThickness="1" CornerRadius="4"
                                 VerticalAlignment="Bottom"
-                                Margin="12,0,4,0"
                                 ToolTip.Tip="Left channel level"
                                 AutomationProperties.Name="Left channel level">
                             <Rectangle Fill="{Binding Audio.VuBrush}"
@@ -193,7 +183,7 @@
                             </Rectangle>
                         </Border>
 
-                        <Border Grid.Column="2"
+                        <Border Grid.Column="4"
                                 Width="8" Height="40"
                                 Background="{DynamicResource VuBg}"
                                 BorderBrush="{DynamicResource VuBorder}"
@@ -212,19 +202,25 @@
                             </Rectangle>
                         </Border>
                     </Grid>
+
+                    <Button Classes.active="{Binding Audio.IsRunning}"
+                            Content="{Binding Audio.ToggleText}"
+                            Command="{Binding Audio.ToggleCommand}"
+                            HorizontalAlignment="Stretch"
+                            AutomationProperties.Name="Start or stop audio passthrough"
+                            ToolTip.Tip="Start / stop Line-In audio passthrough"/>
                 </StackPanel>
             </Border>
 
             <!-- ══ Run timer ═══════════════════════════════════════ -->
             <Border Classes="sidebar-card">
-                <StackPanel>
+                <StackPanel Classes="card-body">
                     <TextBlock Text="RUN TIMER" Classes="section-header"/>
 
                     <Border Background="{DynamicResource TimerBg}"
                             BorderBrush="{DynamicResource TimerBorder}"
                             BorderThickness="1" CornerRadius="8"
-                            Padding="12"
-                            Margin="0,0,0,8">
+                            Padding="12">
                         <TextBlock Text="{Binding Timer.Display}"
                                    Classes="timer numeric"
                                    Classes.running="{Binding Timer.IsRunning}"
@@ -234,27 +230,29 @@
                                    AutomationProperties.Name="Speedrun timer"/>
                     </Border>
 
-                    <Button Content="{Binding Timer.StartPauseText}"
-                            Command="{Binding Timer.StartPauseCommand}"
-                            HorizontalAlignment="Stretch"
-                            Margin="0,0,0,4"
-                            AutomationProperties.Name="Start or pause timer"
-                            ToolTip.Tip="Start / pause the timer  (Space)"/>
-
-                    <UniformGrid Rows="1" Columns="2">
-                        <Button Content="⚑  Lap"
+                    <Grid ColumnDefinitions="*,8,*,8,*">
+                        <Button Grid.Column="0"
+                                Classes="compact"
+                                Content="{Binding Timer.StartPauseText}"
+                                Command="{Binding Timer.StartPauseCommand}"
+                                HorizontalAlignment="Stretch"
+                                AutomationProperties.Name="Start or pause timer"
+                                ToolTip.Tip="Start / pause the timer  (Space)"/>
+                        <Button Grid.Column="2"
+                                Classes="compact"
+                                Content="Lap"
                                 Command="{Binding Timer.LapCommand}"
-                                Margin="0,0,4,0"
-                                FontSize="13" Padding="8,0"
+                                HorizontalAlignment="Stretch"
                                 AutomationProperties.Name="Record lap"
                                 ToolTip.Tip="Record a lap split to the event log"/>
-                        <Button Content="✕  Reset"
+                        <Button Grid.Column="4"
+                                Classes="compact"
+                                Content="Reset"
                                 Command="{Binding Timer.ResetCommand}"
-                                Margin="4,0,0,0"
-                                FontSize="13" Padding="8,0"
+                                HorizontalAlignment="Stretch"
                                 AutomationProperties.Name="Reset timer"
                                 ToolTip.Tip="Reset the timer to zero"/>
-                    </UniformGrid>
+                    </Grid>
                 </StackPanel>
             </Border>
 

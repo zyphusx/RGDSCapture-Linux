@@ -77,10 +77,9 @@
                     Background="{DynamicResource SurfaceRaisedBg}"
                     BorderBrush="{DynamicResource BorderSubtle}"
                     BorderThickness="0,1,0,0"
-                    Padding="8">
-                <Button Content="Clear Log"
+                    Padding="12,8">
+                <Button Content="Clear log"
                         HorizontalAlignment="Stretch"
-                        FontSize="13"
                         Command="{Binding Log.ClearCommand}"
                         AutomationProperties.Name="Clear event log"/>
             </Border>

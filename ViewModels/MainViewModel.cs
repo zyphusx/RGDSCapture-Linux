@@ -327,7 +327,7 @@ namespace RGDSCapture.ViewModels
         }
 
         public string CombinedRecordButtonText =>
-            IsCombinedRecording ? "■  Combined" : "●  Combined";
+            IsCombinedRecording ? "Stop combined" : "Record combined";
 
         public int ReplaySeconds => Settings.ReplaySeconds;
         public bool IsReplay15 => Settings.ReplaySeconds == 15;

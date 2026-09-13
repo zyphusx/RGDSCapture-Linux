@@ -457,7 +457,7 @@
                         Padding="16,8">
                     <DockPanel LastChildFill="False">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Ellipse Width="7" Height="7"
+                            <Ellipse Width="8" Height="8"
                                      Fill="{Binding StatusDotBrush}"
                                      VerticalAlignment="Center"
                                      Margin="0,0,8,0"/>

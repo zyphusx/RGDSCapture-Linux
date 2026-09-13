@@ -15,7 +15,7 @@
            Type      11 · 13 · 15 · 28           four sizes, one family
            Space     4 · 8 · 12 · 16 · 20 · 24   margins and gaps
            Radius    12 card · 8 control · 6 chip
-           Height    32 control · 30 chip · 26 segment
+           Height    32 control · 30 menu row · 26 segment
 
          Heights come from MinHeight with vertically centred content,
          never from vertical padding. Padding-driven heights drift the
@@ -173,6 +173,19 @@
         <Setter Property="FontSize" Value="13"/>
     </Style>
 
+    <!-- Compact: a button sharing a row with two or more others, where the
+         default 16px side padding would clip its label. Height is unchanged. -->
+    <Style Selector="Button.compact">
+        <Setter Property="Padding" Value="8,0"/>
+    </Style>
+
+    <!-- Row: a full-width button laid out like a list row (leading icon,
+         label, trailing chevron) rather than a centred label. -->
+    <Style Selector="Button.row">
+        <Setter Property="Padding" Value="12,0"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    </Style>
+
     <!-- Danger: destructive, but not shouting until hovered -->
     <Style Selector="Button.danger">
         <Setter Property="Background" Value="{DynamicResource DangerBg}"/>
@@ -278,13 +291,18 @@
         <Setter Property="BorderBrush" Value="{DynamicResource SegmentBorder}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="8"/>
-        <Setter Property="Padding" Value="2"/>
+        <Setter Property="Padding" Value="1"/>
     </Style>
 
+    <!-- The track's 1px padding plus each segment's 1px margin puts 2px
+         between every segment and between a segment and the track edge, in
+         both directions, so a selected pill never butts against its
+         neighbour. 1 border + 2 + 26 + 2 + 1 border = the 32 control height. -->
     <Style Selector="RadioButton.segment">
         <Setter Property="Foreground" Value="{DynamicResource SegmentFg}"/>
         <Setter Property="FontSize" Value="13"/>
         <Setter Property="Padding" Value="8,0"/>
+        <Setter Property="Margin" Value="1"/>
         <Setter Property="MinHeight" Value="26"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="HorizontalContentAlignment" Value="Center"/>
@@ -311,10 +329,11 @@
     <Style Selector="RadioButton.segment:pointerover">
         <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
     </Style>
+    <!-- No glow: inside a 2px-inset track it spills over the neighbouring
+         segments and past the track edge. -->
     <Style Selector="RadioButton.segment:checked /template/ Border#Root">
         <Setter Property="Background" Value="{DynamicResource AccentSelBg}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource AccentGradient}"/>
-        <Setter Property="BoxShadow" Value="{DynamicResource AccentGlow}"/>
     </Style>
     <Style Selector="RadioButton.segment:checked">
         <Setter Property="Foreground" Value="{DynamicResource SegmentSelFg}"/>
@@ -325,13 +344,63 @@
         <Setter Property="Cursor" Value="Arrow"/>
     </Style>
 
+    <!-- A toggle sharing a track with RadioButton.segment cells (e.g. "Swap"
+         sitting alongside Layout's radio options). Same template, height and
+         states as .segment — ToggleButton.chip draws its own nested track
+         chrome and stands 6px taller, which forces the whole UniformGrid row
+         to grow to match it and doubles the border inside the track. Use
+         .chip only for a toggle that stands alone, outside a segment-track. -->
+    <Style Selector="ToggleButton.segment">
+        <Setter Property="Foreground" Value="{DynamicResource SegmentFg}"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Padding" Value="8,0"/>
+        <Setter Property="Margin" Value="1"/>
+        <Setter Property="MinHeight" Value="26"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="Root"
+                        Background="Transparent"
+                        BorderBrush="Transparent"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="{TemplateBinding Padding}">
+                    <ContentPresenter Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalAlignment="Center"
+                                      RecognizesAccessKey="True"/>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="ToggleButton.segment:pointerover /template/ Border#Root">
+        <Setter Property="Background" Value="{DynamicResource SegmentHoverBg}"/>
+    </Style>
+    <Style Selector="ToggleButton.segment:pointerover">
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+    </Style>
+    <Style Selector="ToggleButton.segment:checked /template/ Border#Root">
+        <Setter Property="Background" Value="{DynamicResource AccentSelBg}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentGradient}"/>
+    </Style>
+    <Style Selector="ToggleButton.segment:checked">
+        <Setter Property="Foreground" Value="{DynamicResource SegmentSelFg}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+    <Style Selector="ToggleButton.segment:disabled">
+        <Setter Property="Opacity" Value="0.4"/>
+        <Setter Property="Cursor" Value="Arrow"/>
+    </Style>
+
     <!-- On/off chip. A real toggle, so ToggleButton is safe here: a
          re-click genuinely flips the underlying value. -->
     <Style Selector="ToggleButton.chip">
         <Setter Property="Foreground" Value="{DynamicResource SegmentFg}"/>
         <Setter Property="FontSize" Value="13"/>
         <Setter Property="Padding" Value="12,0"/>
-        <Setter Property="MinHeight" Value="30"/>
+        <Setter Property="MinHeight" Value="32"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="HorizontalContentAlignment" Value="Center"/>
         <Setter Property="Template">
@@ -357,13 +426,13 @@
     <Style Selector="ToggleButton.chip:pointerover">
         <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
     </Style>
+    <!-- Checked reads exactly like a selected segment. -->
     <Style Selector="ToggleButton.chip:checked /template/ Border#Root">
         <Setter Property="Background" Value="{DynamicResource AccentSelBg}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource AccentGradient}"/>
-        <Setter Property="BoxShadow" Value="{DynamicResource AccentGlow}"/>
     </Style>
     <Style Selector="ToggleButton.chip:checked">
-        <Setter Property="Foreground" Value="{DynamicResource AccentSubtleFg}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SegmentSelFg}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
     </Style>
     <Style Selector="ToggleButton.chip:disabled">
@@ -463,6 +532,7 @@
         <Setter Property="FontSize" Value="13"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="HorizontalAlignment" Value="Stretch"/>
         <Setter Property="PlaceholderForeground" Value="{DynamicResource TextTertiary}"/>
     </Style>
     <Style Selector="ComboBox /template/ Border#Background">
@@ -639,7 +709,6 @@
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="12"/>
         <Setter Property="Padding" Value="16"/>
-        <Setter Property="Margin" Value="0,0,0,12"/>
     </Style>
 
     <!-- Hairline divider inside a card -->
@@ -679,6 +748,54 @@
         <Setter Property="FontSize" Value="13"/>
         <Setter Property="FontFeatures" Value="+tnum"/>
         <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════
+         CARD RHYTHM
+
+         Spacing comes from the container, not from margins on each child,
+         so no control can end up 4px from one neighbour and 12px from the
+         next. Inside a card there are exactly two gaps:
+
+           12   between items (header, fields, buttons, dividers)
+            4   between a field's label and its control
+
+         These sit at the end of the file on purpose: a later style wins,
+         and they have to override the margins given to section-header,
+         field-label and card-divider above.
+    ═══════════════════════════════════════════════════════════ -->
+    <Style Selector="StackPanel.card-body">
+        <Setter Property="Spacing" Value="12"/>
+    </Style>
+    <Style Selector="StackPanel.card-body > TextBlock.section-header">
+        <Setter Property="Margin" Value="0"/>
+    </Style>
+    <Style Selector="StackPanel.card-body > Border.card-divider">
+        <Setter Property="Margin" Value="0"/>
+    </Style>
+
+    <!-- A label and the control it names -->
+    <Style Selector="StackPanel.field">
+        <Setter Property="Spacing" Value="4"/>
+    </Style>
+    <Style Selector="StackPanel.field > TextBlock.field-label">
+        <Setter Property="Margin" Value="0"/>
+    </Style>
+
+    <!-- A disabled field dims as one unit, label included. The controls
+         inside are disabled too and would dim themselves a second time
+         (0.4 × 0.4), so they are reset here. -->
+    <Style Selector="StackPanel.field:disabled">
+        <Setter Property="Opacity" Value="0.4"/>
+    </Style>
+    <Style Selector="StackPanel.field:disabled RadioButton.segment:disabled">
+        <Setter Property="Opacity" Value="1"/>
+    </Style>
+    <Style Selector="StackPanel.field:disabled ToggleButton.segment:disabled">
+        <Setter Property="Opacity" Value="1"/>
+    </Style>
+    <Style Selector="StackPanel.field:disabled ToggleButton.chip:disabled">
+        <Setter Property="Opacity" Value="1"/>
     </Style>
 
 </Styles>

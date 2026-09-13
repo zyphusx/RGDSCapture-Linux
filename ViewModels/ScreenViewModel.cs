@@ -112,7 +112,7 @@ namespace RGDSCapture.ViewModels
         }
 
         public string RecordButtonText =>
-            IsRecording ? "■  Stop" : "●  " + (Id == ScreenId.Top ? "Top" : "Bottom");
+            (IsRecording ? "Stop " : "Record ") + (Id == ScreenId.Top ? "top screen" : "bottom screen");
 
         public AsyncRelayCommand ToggleRecordingCommand { get; }
 
