@@ -54,7 +54,7 @@
                         BorderThickness="{TemplateBinding BorderThickness}"
                         CornerRadius="6"
                         Padding="{TemplateBinding Padding}">
-                    <ContentPresenter Name="PART_ContentPresenter"
+                    <ContentPresenter Name="ContentHost"
                                       Content="{TemplateBinding Content}"
                                       ContentTemplate="{TemplateBinding ContentTemplate}"
                                       HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
@@ -80,14 +80,18 @@
         <Setter Property="Cursor" Value="Arrow"/>
     </Style>
 
-    <!-- Accent: the one primary action on screen.
+    <!-- Primary: the one main action on screen.
+
+         Named "primary" rather than "accent" because Fluent already defines
+         a Button.accent style of its own; sharing the name let it paint its
+         system accent over ours.
 
          The fill stays a flat colour on purpose. A pride theme's stripes
          run across the border instead: text over a six-colour gradient
          cannot hold a contrast ratio (white on the rainbow's yellow band
          fails outright), whereas a 2px outline carries the whole flag
          safely. -->
-    <Style Selector="Button.accent">
+    <Style Selector="Button.primary">
         <Setter Property="Background" Value="{DynamicResource AccentBg}"/>
         <Setter Property="Foreground" Value="{DynamicResource AccentFg}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource AccentGradient}"/>
@@ -95,20 +99,20 @@
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Padding" Value="14,8"/>
     </Style>
-    <Style Selector="Button.accent /template/ Border#Root">
+    <Style Selector="Button.primary /template/ Border#Root">
         <Setter Property="BoxShadow" Value="{DynamicResource AccentGlow}"/>
     </Style>
 
     <!-- Only the fill reacts. Leaving BorderBrush alone keeps a pride
          theme's stripes on the outline through hover and press. -->
-    <Style Selector="Button.accent:pointerover /template/ Border#Root">
+    <Style Selector="Button.primary:pointerover /template/ Border#Root">
         <Setter Property="Background" Value="{DynamicResource AccentHover}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource AccentGradient}"/>
     </Style>
-    <Style Selector="Button.accent:pressed /template/ Border#Root">
+    <Style Selector="Button.primary:pressed /template/ Border#Root">
         <Setter Property="Background" Value="{DynamicResource AccentPress}"/>
     </Style>
-    <Style Selector="Button.accent:disabled /template/ Border#Root">
+    <Style Selector="Button.primary:disabled /template/ Border#Root">
         <Setter Property="BoxShadow" Value="none"/>
     </Style>
 

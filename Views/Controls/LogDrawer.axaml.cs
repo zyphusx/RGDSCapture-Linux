@@ -1,7 +1,6 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
 using Avalonia.Controls;
-using Avalonia.Markup.Xaml;
 using RGDSCapture.ViewModels;
 
 namespace RGDSCapture.Views.Controls
@@ -27,8 +26,6 @@ namespace RGDSCapture.Views.Controls
             InitializeComponent();
             DataContextChanged += OnDataContextChanged;
         }
-
-        private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 
         private void OnDataContextChanged(object? sender, EventArgs e)
         {

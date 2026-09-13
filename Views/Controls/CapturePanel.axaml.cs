@@ -1,5 +1,4 @@
 using Avalonia.Controls;
-using Avalonia.Markup.Xaml;
 
 namespace RGDSCapture.Views.Controls
 {
@@ -9,6 +8,6 @@ namespace RGDSCapture.Views.Controls
     /// </summary>
     public partial class CapturePanel : UserControl
     {
-        public CapturePanel() => AvaloniaXamlLoader.Load(this);
+        public CapturePanel() => InitializeComponent();
     }
 }

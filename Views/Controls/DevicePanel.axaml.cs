@@ -1,5 +1,4 @@
 using Avalonia.Controls;
-using Avalonia.Markup.Xaml;
 
 namespace RGDSCapture.Views.Controls
 {
@@ -10,6 +9,6 @@ namespace RGDSCapture.Views.Controls
     /// </summary>
     public partial class DevicePanel : UserControl
     {
-        public DevicePanel() => AvaloniaXamlLoader.Load(this);
+        public DevicePanel() => InitializeComponent();
     }
 }

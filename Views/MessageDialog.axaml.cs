@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Input;
-using Avalonia.Markup.Xaml;
 using RGDSCapture.Services;
 
 namespace RGDSCapture.Views
@@ -23,8 +22,6 @@ namespace RGDSCapture.Views
             // The window is borderless, so the header stands in for a title bar.
             DragHandle.PointerPressed += OnDragHandlePressed;
         }
-
-        private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 
         private void OnDragHandlePressed(object? sender, PointerPressedEventArgs e)
         {

@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Input;
-using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using RGDSCapture.ViewModels;
 
@@ -28,7 +27,7 @@ namespace RGDSCapture.Views
         private readonly DispatcherTimer _hideTimer = new();
         private MainViewModel? _main;
 
-        public FullScreenWindow() { InitializeComponent(); }
+        public FullScreenWindow() { InitializeComponent(); WireUp(); }
 
         public FullScreenWindow(MainViewModel main, ScreenViewModel screen) : this()
         {
@@ -41,9 +40,13 @@ namespace RGDSCapture.Views
             Closed += (_, _) => main.PropertyChanged -= OnMainPropertyChanged;
         }
 
-        private void InitializeComponent()
+        /// <summary>
+        /// Event wiring, kept separate from the generated
+        /// InitializeComponent — that is what assigns the x:Name fields, so
+        /// it has to run first and must not be hidden by a hand-written one.
+        /// </summary>
+        private void WireUp()
         {
-            AvaloniaXamlLoader.Load(this);
 
             BtnClose.Click += (_, _) => Close();
 

@@ -82,7 +82,7 @@
                         <Button Name="BtnConnect"
                                 Content="Connect"
                                 Width="92"
-                                Classes="accent"
+                                Classes="primary"
                                 IsDefault="True"/>
                     </StackPanel>
 

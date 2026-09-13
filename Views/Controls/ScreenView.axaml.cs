@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Markup.Xaml;
 using Avalonia.Media.Imaging;
 using Avalonia.VisualTree;
 using RGDSCapture.Core;
@@ -32,8 +31,6 @@ namespace RGDSCapture.Views.Controls
             FullscreenButton.Click += OnFullscreenClick;
             Video.PointerPressed += OnVideoPressed;
         }
-
-        private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 
         protected override void OnAttachedToVisualTree(
             VisualTreeAttachmentEventArgs e)

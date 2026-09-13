@@ -3,7 +3,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
-using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using RGDSCapture.Services;
@@ -24,7 +23,7 @@ namespace RGDSCapture.Views
         private readonly MainViewModel? _vm;
         private bool _syncing;
 
-        public ThemeDialog() { InitializeComponent(); }
+        public ThemeDialog() { InitializeComponent(); WireUp(); }
 
         public ThemeDialog(MainViewModel vm) : this()
         {
@@ -44,9 +43,13 @@ namespace RGDSCapture.Views
             Closed += (_, _) => vm.PropertyChanged -= OnVmPropertyChanged;
         }
 
-        private void InitializeComponent()
+        /// <summary>
+        /// Event wiring, kept separate from the generated
+        /// InitializeComponent — that is what assigns the x:Name fields, so
+        /// it has to run first and must not be hidden by a hand-written one.
+        /// </summary>
+        private void WireUp()
         {
-            AvaloniaXamlLoader.Load(this);
 
             BtnCloseHeader.Click += (_, _) => Close();
             BtnDone.Click += (_, _) => Close();

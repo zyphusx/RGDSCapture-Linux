@@ -63,7 +63,7 @@
                         </StackPanel>
                     </Grid>
 
-                    <Button Classes="accent"
+                    <Button Classes="primary"
                             Content="{Binding ConnectButtonText}"
                             Command="{Binding ConnectCommand}"
                             HorizontalAlignment="Stretch"

@@ -43,7 +43,7 @@
                             IsCancel="True"
                             Margin="0,0,8,0"/>
                     <Button Name="BtnYes"
-                            Classes="accent"
+                            Classes="primary"
                             Width="92"
                             IsDefault="True"/>
                 </StackPanel>

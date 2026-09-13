@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Input;
-using Avalonia.Markup.Xaml;
 using RGDSCapture.Services;
 
 namespace RGDSCapture.Views
@@ -41,8 +40,6 @@ namespace RGDSCapture.Views
                     BeginMoveDrag(e);
             };
         }
-
-        private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 
         private void TryAccept()
         {

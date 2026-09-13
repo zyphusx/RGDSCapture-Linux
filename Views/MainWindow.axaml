@@ -382,9 +382,12 @@
                             <Button Name="BtnMinimize"
                                     Classes="caption"
                                     AutomationProperties.Name="Minimize">
-                                <Path Data="M 0 0 H 10"
-                                      Stroke="{Binding $parent[Button].Foreground}"
-                                      StrokeThickness="1.2"/>
+                                <!-- A Rectangle, not a Path: "M 0 0 H 10"
+                                     has a zero-height bounding box, so
+                                     Avalonia lays it out with no height and
+                                     the stroke is clipped away entirely. -->
+                                <Rectangle Width="10" Height="1.2"
+                                           Fill="{Binding $parent[Button].Foreground}"/>
                             </Button>
 
                             <Button Name="BtnMaximize"

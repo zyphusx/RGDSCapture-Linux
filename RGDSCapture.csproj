@@ -24,6 +24,11 @@
     <TrimMode>copyused</TrimMode>
     <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
     <InvariantGlobalization>true</InvariantGlobalization>
+
+    <!-- Avalonia's build task reports telemetry over the network. A Flatpak
+         is built offline, so leaving it on means a batch of failed
+         connections on every build. -->
+    <AvaloniaBuildTelemetryOptOut>true</AvaloniaBuildTelemetryOptOut>
   </PropertyGroup>
 
   <ItemGroup>
@@ -40,12 +45,6 @@
 
     <!-- SSH -->
     <PackageReference Include="SSH.NET" Version="2026.0.0" />
-
-    <!-- Avalonia's X11 backend pulls this in for the FreeDesktop portals,
-         and the version it asks for carries a published advisory
-         (GHSA-xrw6-gwf8-vvr9). Pinned forward directly: the transitive
-         reference is what the restore would otherwise pick. -->
-    <PackageReference Include="Tmds.DBus.Protocol" Version="0.95.1" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(Configuration)' == 'Debug'">

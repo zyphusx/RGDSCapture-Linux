@@ -3,7 +3,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using RGDSCapture.Core;
 using RGDSCapture.Services;
@@ -38,7 +37,7 @@ namespace RGDSCapture.Views
         private readonly double _baseMinWidth;
         private readonly double _baseMinHeight;
 
-        public MainWindow() { InitializeComponent(); }
+        public MainWindow() { InitializeComponent(); WireUp(); }
 
         public MainWindow(MainViewModel vm) : this()
         {
@@ -68,9 +67,13 @@ namespace RGDSCapture.Views
             };
         }
 
-        private void InitializeComponent()
+        /// <summary>
+        /// Event wiring, kept separate from the generated
+        /// InitializeComponent — that is what assigns the x:Name fields, so
+        /// it has to run first and must not be hidden by a hand-written one.
+        /// </summary>
+        private void WireUp()
         {
-            AvaloniaXamlLoader.Load(this);
 
             BtnMinimize.Click += (_, _) => WindowState = WindowState.Minimized;
             BtnMaximize.Click += (_, _) => ToggleMaximize();
