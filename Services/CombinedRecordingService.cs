@@ -1,0 +1,455 @@
+using System.IO;
+using RGDSCapture.Core;
+
+namespace RGDSCapture.Services
+{
+    /// <summary>
+    /// Records both screens plus Line-In audio into a single MP4. The screens
+    /// are composited into one vertically stacked video track (top over
+    /// bottom, like the DS itself) so the file plays correctly in any player —
+    /// multi-track MP4s only show their first video track. Stacking requires
+    /// re-encoding on the PC (libopenh264), which is cheap at 640×960@30.
+    ///
+    /// Sync strategy: each H.264 elementary stream carries no timestamps, so
+    /// alignment comes from wall-clock measurement. The session arms taps on
+    /// both receivers and the audio device, waits until each video stream
+    /// produces an SPS (keyframe boundary — at most one GOP, ~333 ms), then
+    /// builds a filter graph whose setpts expressions shift the later-starting
+    /// screen by whole frames. Audio captured before the video base time is
+    /// trimmed to the sample. Net alignment is within a few tens of ms.
+    /// </summary>
+    public static class CombinedRecordingService
+    {
+        public static CombinedRecordingSession? Start(
+            RtpStreamReceiver top,
+            RtpStreamReceiver bottom,
+            string? audioDeviceId,
+            Action<string, bool> log)
+        {
+            if (!File.Exists(AppPaths.FfmpegExe))
+            {
+                log($"[RECORD] ffmpeg not found at {AppPaths.FfmpegExe}", true);
+                return null;
+            }
+            if (!top.IsRunning || !bottom.IsRunning)
+            {
+                log("[RECORD] Streams are not running.", true);
+                return null;
+            }
+
+            Directory.CreateDirectory(AppPaths.RecordingsDir);
+            string ts = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+            string outFile = Path.Combine(AppPaths.RecordingsDir, $"rg_combined_{ts}.mp4");
+
+            try
+            {
+                return new CombinedRecordingSession(top, bottom, audioDeviceId, outFile, log);
+            }
+            catch (Exception ex)
+            {
+                log($"[RECORD] Combined start failed: {ex.Message}", true);
+                return null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// One in-progress combined recording: both screens stacked into a single
+    /// MP4 alongside the Line-In audio. Owns the ffmpeg process and the pipes
+    /// feeding it, and reports an unexpected death through <see cref="Failed"/>
+    /// rather than throwing on whichever thread happened to notice.
+    /// </summary>
+    public sealed class CombinedRecordingSession : IDisposable
+    {
+        private const string VideoInputArgs =
+            "-thread_queue_size 1024 -fflags +genpts -framerate 30 -f h264";
+        private const string AudioInputArgs =
+            "-thread_queue_size 1024 -f s16le -ar 48000 -ac 2";
+        private const int AudioBytesPerSecond = 48000 * 2 * 2;
+
+        /// <summary>Raised (any thread) when the session dies before StopAsync.</summary>
+        public event Action? Failed;
+
+        public string OutputFile { get; }
+
+        private enum Phase { Arming, Streaming, Stopped, Aborted }
+
+        private readonly object _gate = new();
+        private readonly RtpStreamReceiver _top;
+        private readonly RtpStreamReceiver _bottom;
+        private readonly Action<string, bool> _log;
+        private readonly Task _armTask;
+
+        private readonly List<byte[]> _preTop = new();
+        private readonly List<byte[]> _preBottom = new();
+        private readonly List<byte[]> _preAudio = new();
+
+        private Phase _phase = Phase.Arming;
+        private bool _spsTopSeen, _spsBottomSeen, _audioChunkSeen;
+        private DateTime _spsTopUtc, _spsBottomUtc, _audioStartUtc;
+        private long _audioSkipBytes;
+        private AudioRecordingTap? _audio;
+        private FfmpegPipeMuxer? _mux;
+        private int _failedRaised;
+
+        internal CombinedRecordingSession(
+            RtpStreamReceiver top, RtpStreamReceiver bottom,
+            string? audioDeviceId, string outFile, Action<string, bool> log)
+        {
+            _top = top;
+            _bottom = bottom;
+            OutputFile = outFile;
+            _log = log;
+
+            if (audioDeviceId is not null)
+            {
+                try
+                {
+                    _audio = new AudioRecordingTap(audioDeviceId);
+                    _audio.DataAvailable += OnAudio;
+                }
+                catch (Exception ex)
+                {
+                    _audio = null;
+                    log($"[RECORD] Audio capture unavailable ({ex.Message}) — recording video only.", true);
+                }
+            }
+            else
+            {
+                log("[RECORD] No audio input selected — recording video only.", false);
+            }
+
+            _top.NalUnitReceived += OnTopNal;
+            _bottom.NalUnitReceived += OnBottomNal;
+
+            _armTask = Task.Run(ArmAsync);
+        }
+
+        // ── Live taps ─────────────────────────────────────────────────
+        private void OnTopNal(byte[] nal)
+        {
+            lock (_gate)
+            {
+                switch (_phase)
+                {
+                    case Phase.Arming:
+                        if (!_spsTopSeen)
+                        {
+                            if (!IsSps(nal)) return;
+                            _spsTopSeen = true;
+                            _spsTopUtc = DateTime.UtcNow;
+                        }
+                        _preTop.Add(nal);
+                        break;
+                    case Phase.Streaming:
+                        _mux!.TryWrite(0, nal);
+                        break;
+                }
+            }
+        }
+
+        private void OnBottomNal(byte[] nal)
+        {
+            lock (_gate)
+            {
+                switch (_phase)
+                {
+                    case Phase.Arming:
+                        if (!_spsBottomSeen)
+                        {
+                            if (!IsSps(nal)) return;
+                            _spsBottomSeen = true;
+                            _spsBottomUtc = DateTime.UtcNow;
+                        }
+                        _preBottom.Add(nal);
+                        break;
+                    case Phase.Streaming:
+                        _mux!.TryWrite(1, nal);
+                        break;
+                }
+            }
+        }
+
+        private void OnAudio(byte[] pcm)
+        {
+            lock (_gate)
+            {
+                switch (_phase)
+                {
+                    case Phase.Arming:
+                        if (!_audioChunkSeen)
+                        {
+                            _audioChunkSeen = true;
+                            // The first batch arrives when its capture finishes;
+                            // back-date to its first sample so device startup
+                            // latency isn't mistaken for recorded audio.
+                            _audioStartUtc = DateTime.UtcNow
+                                .AddSeconds(-(double)pcm.Length / AudioBytesPerSecond);
+                        }
+                        _preAudio.Add(pcm);
+                        break;
+                    case Phase.Streaming:
+                        WriteAudioTrimmed(pcm);
+                        break;
+                }
+            }
+        }
+
+        /// <summary>Drops leading samples captured before the video base time.</summary>
+        private void WriteAudioTrimmed(byte[] pcm)
+        {
+            if (_audioSkipBytes >= pcm.Length)
+            {
+                _audioSkipBytes -= pcm.Length;
+                return;
+            }
+            if (_audioSkipBytes > 0)
+            {
+                var rest = new byte[pcm.Length - _audioSkipBytes];
+                Buffer.BlockCopy(pcm, (int)_audioSkipBytes, rest, 0, rest.Length);
+                _audioSkipBytes = 0;
+                _mux!.TryWrite(2, rest);
+                return;
+            }
+            _mux!.TryWrite(2, pcm);
+        }
+
+        // ── Arm: wait for keyframes, compute offsets, launch ffmpeg ──
+        private async Task ArmAsync()
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(6);
+            while (DateTime.UtcNow < deadline)
+            {
+                lock (_gate)
+                {
+                    if (_phase != Phase.Arming) return;   // stopped during arm
+                    if (_spsTopSeen && _spsBottomSeen) break;
+                }
+                await Task.Delay(50);
+            }
+
+            bool hasAudio;
+            lock (_gate)
+            {
+                if (_phase != Phase.Arming) return;
+
+                if (!_spsTopSeen || !_spsBottomSeen)
+                {
+                    string which = !_spsTopSeen ? "top" : "bottom";
+                    _phase = Phase.Aborted;
+                    DetachTaps();
+                    _log($"[RECORD] Combined: no keyframe from the {which} stream within 6 s — aborted.", true);
+                    RaiseFailedOnce();
+                    return;
+                }
+
+                var baseUtc = _spsTopUtc < _spsBottomUtc ? _spsTopUtc : _spsBottomUtc;
+                double topOffset = (_spsTopUtc - baseUtc).TotalSeconds;
+                double bottomOffset = (_spsBottomUtc - baseUtc).TotalSeconds;
+
+                hasAudio = _audio != null;
+                var inputs = new List<MuxInput>
+                {
+                    new(VideoInputArgs, 0),
+                    new(VideoInputArgs, 0)
+                };
+
+                double audioOffset = 0;
+                if (hasAudio)
+                {
+                    if (!_audioChunkSeen) _audioStartUtc = DateTime.UtcNow;
+                    if (_audioStartUtc <= baseUtc)
+                    {
+                        _audioSkipBytes = (long)((baseUtc - _audioStartUtc).TotalSeconds * AudioBytesPerSecond);
+                        _audioSkipBytes -= _audioSkipBytes % 4;   // whole stereo frames
+                    }
+                    else
+                    {
+                        audioOffset = (_audioStartUtc - baseUtc).TotalSeconds;
+                    }
+                    inputs.Add(new MuxInput(AudioInputArgs, audioOffset));
+                }
+
+                // setpts assigns frame-index CFR timestamps (ignoring the
+                // demuxer's, which can be poisoned by SPS VUI timing); the
+                // later-starting screen is shifted by whole frames so content
+                // aligns, and framesync holds its first frame during the
+                // brief lead-in.
+                int shiftFrames = (int)Math.Round(Math.Max(topOffset, bottomOffset) * 30);
+                string topPts = shiftFrames > 0 && topOffset > bottomOffset
+                    ? $"(N+{shiftFrames})/(30*TB)" : "N/(30*TB)";
+                string bottomPts = shiftFrames > 0 && bottomOffset > topOffset
+                    ? $"(N+{shiftFrames})/(30*TB)" : "N/(30*TB)";
+                string graph =
+                    $"[0:v]setpts={topPts}[v0];" +
+                    $"[1:v]setpts={bottomPts}[v1];" +
+                    "[v0][v1]vstack=inputs=2,format=yuv420p[v]";
+
+                string outputArgs =
+                    $"-filter_complex \"{graph}\" -map \"[v]\" " +
+                    (hasAudio ? "-map 2:a:0 " : "") +
+                    "-c:v libopenh264 -b:v 4M -g 60 " +
+                    (hasAudio ? "-c:a aac -b:a 192k " : "") +
+                    "-movflags +faststart";
+
+                try
+                {
+                    _mux = new FfmpegPipeMuxer(OutputFile, inputs, outputArgs, _log);
+                }
+                catch (Exception ex)
+                {
+                    _phase = Phase.Aborted;
+                    DetachTaps();
+                    _log($"[RECORD] Combined: ffmpeg launch failed: {ex.Message}", true);
+                    RaiseFailedOnce();
+                    return;
+                }
+                _mux.Failed += RaiseFailedOnce;
+
+                foreach (var nal in _preTop) _mux.TryWrite(0, nal);
+                foreach (var nal in _preBottom) _mux.TryWrite(1, nal);
+                foreach (var pcm in _preAudio) WriteAudioTrimmed(pcm);
+                _preTop.Clear();
+                _preBottom.Clear();
+                _preAudio.Clear();
+
+                _phase = Phase.Streaming;
+            }
+
+            _log($"[RECORD] Combined → {OutputFile} (stacked top/bottom{(hasAudio ? " + audio" : "")})", false);
+        }
+
+        // ── Stop / teardown ───────────────────────────────────────────
+        public async Task StopAsync()
+        {
+            lock (_gate)
+            {
+                if (_phase is Phase.Stopped or Phase.Aborted) return;
+                _phase = _phase == Phase.Streaming ? Phase.Stopped : Phase.Aborted;
+            }
+
+            DetachTaps();
+            await _armTask;
+
+            if (_mux != null)
+            {
+                _mux.Failed -= RaiseFailedOnce;
+                // Generous timeout: +faststart rewrites the file on finalize.
+                bool ok = await _mux.CompleteAsync(timeoutMs: 120_000);
+                _log(ok
+                    ? "[RECORD] Combined recording saved."
+                    : "[RECORD] Combined recording may be incomplete (ffmpeg did not exit cleanly).",
+                    !ok);
+            }
+        }
+
+        private void DetachTaps()
+        {
+            _top.NalUnitReceived -= OnTopNal;
+            _bottom.NalUnitReceived -= OnBottomNal;
+            if (_audio != null)
+            {
+                _audio.DataAvailable -= OnAudio;
+                _audio.Dispose();
+                _audio = null;
+            }
+        }
+
+        private void RaiseFailedOnce()
+        {
+            if (Interlocked.Exchange(ref _failedRaised, 1) == 0)
+                Failed?.Invoke();
+        }
+
+        private static bool IsSps(byte[] nal)
+            => nal.Length > 4 && (nal[4] & 0x1F) == 7;
+
+        public void Dispose()
+        {
+            lock (_gate)
+            {
+                if (_phase is Phase.Arming or Phase.Streaming)
+                    _phase = Phase.Aborted;
+            }
+            DetachTaps();
+            _mux?.Dispose();
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    /// <summary>
+    /// Independent Line-In capture for recording. Separate from the
+    /// passthrough engine so combined recording works whether or not
+    /// monitoring is running — PulseAudio lets any number of streams read the
+    /// same source, so the two captures do not contend for the device.
+    /// Recorded at unity gain — the monitor volume slider does not color the
+    /// recording.
+    /// </summary>
+    public sealed class AudioRecordingTap : IDisposable
+    {
+        public event Action<byte[]>? DataAvailable;
+
+        private const int SampleRate = 48000;
+        private const int Channels = 2;
+        private const int ChunkMs = 30;
+        private const int ChunkBytes = SampleRate * Channels * 2 * ChunkMs / 1000;
+
+        private readonly PulseAudio.Stream _input;
+        private readonly CancellationTokenSource _cts = new();
+        private readonly Thread _thread;
+
+        public AudioRecordingTap(string? deviceId)
+        {
+            _input = PulseAudio.Stream.Open(
+                record: true,
+                deviceId,
+                new PulseAudio.SampleSpec
+                {
+                    Format = PulseAudio.SampleS16Le,
+                    Rate = SampleRate,
+                    Channels = Channels
+                },
+                new PulseAudio.BufferAttr
+                {
+                    MaxLength = PulseAudio.BufferAttr.Unset,
+                    TargetLength = PulseAudio.BufferAttr.Unset,
+                    PreBuffer = PulseAudio.BufferAttr.Unset,
+                    MinRequest = PulseAudio.BufferAttr.Unset,
+                    FragmentSize = ChunkBytes
+                },
+                "Recording tap");
+
+            _thread = new Thread(CaptureLoop)
+            {
+                IsBackground = true,
+                Name = "RGDS audio record tap",
+                Priority = ThreadPriority.AboveNormal
+            };
+            _thread.Start();
+        }
+
+        private void CaptureLoop()
+        {
+            var buffer = new byte[ChunkBytes];
+
+            while (!_cts.IsCancellationRequested)
+            {
+                if (!_input.Read(buffer, buffer.Length)) break;
+
+                // The read buffer is reused — copy before handing off.
+                var copy = new byte[buffer.Length];
+                Buffer.BlockCopy(buffer, 0, copy, 0, buffer.Length);
+                DataAvailable?.Invoke(copy);
+            }
+        }
+
+        public void Dispose()
+        {
+            _cts.Cancel();
+            // Closing the stream unblocks a thread parked in Read.
+            _input.Dispose();
+            _thread.Join(500);
+            _cts.Dispose();
+        }
+    }
+}
