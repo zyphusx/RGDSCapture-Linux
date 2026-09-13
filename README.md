@@ -68,7 +68,7 @@ someone else.
 ### Running from source
 
 ```bash
-dotnet run                      # needs .NET 10 and FFmpeg 9.x on the system
+dotnet run                      # needs .NET 10; uses the system FFmpeg 8.x
 ```
 
 ---
@@ -79,19 +79,33 @@ dotnet run                      # needs .NET 10 and FFmpeg 9.x on the system
 |---|---|
 | **OS** | Any modern Linux desktop; developed against Nobara / Fedora |
 | **Runtime** | .NET 10 (bundled in the Flatpak) |
-| **FFmpeg** | 9.x specifically — see below (bundled in the Flatpak) |
+| **FFmpeg** | 8.x — what Nobara ships, so nothing extra to install |
 | **Audio** | PipeWire or PulseAudio |
 | **Keyring** | Any Secret Service provider, for "remember credentials" |
 | **Display** | Wayland or X11 |
 
-### Why FFmpeg 9 specifically
+### Why FFmpeg 8 specifically
 
-The bindings resolve native libraries by soname — `libavcodec.so.63`,
-`libavutil.so.61`, `libswscale.so.10`, `libswresample.so.7` — so an older
-FFmpeg does not load at all rather than mis-binding. No current freedesktop
-runtime ships that generation, which is why the Flatpak builds its own (LGPL,
-decode and remux only). If you run from source, you need FFmpeg 9.x on the
-system.
+The bindings resolve native libraries by soname — `libavcodec.so.62`,
+`libavutil.so.60`, `libswscale.so.9`, `libswresample.so.6` — so a different
+FFmpeg generation does not load at all rather than mis-binding. `8.x` is what
+Nobara ships (8.1.2 at time of writing), so running from source needs nothing
+installed beyond what is already there.
+
+The Windows build tracks FFmpeg 9. Matching the distro here is deliberate:
+security fixes then arrive through `dnf` and are RPM Fusion's job, rather than
+being pinned to whenever this project last rebuilt. Distributions backport
+fixes to the branch they ship, so a lower major is not a lower patch level —
+`rpm -q --changelog ffmpeg-libs | grep CVE` shows what has been applied.
+
+Inside the Flatpak that argument does not hold — a bundle is only as current
+as its last rebuild — which is the main reason to prefer running from source
+on Nobara.
+
+To move to another generation, change the `FFmpeg.AutoGen` package version and
+the matching `AvcodecMajor` in `Services/FFmpegLoader.cs`; they are generated
+as a pair and must move together. `7.1.1` binds `so.61`, `8.1.0` binds
+`so.62`, `9.0.1.1` binds `so.63`.
 
 ---
 
@@ -107,7 +121,7 @@ everything that touched a Windows API:
 | Saved password | DPAPI blob in `settings.json` | Desktop keyring (Secret Service) |
 | Recording pipes | Windows named pipes | FIFOs |
 | Paths | `%APPDATA%`, `MyVideos` | XDG base directories, `xdg-user-dirs` |
-| FFmpeg | ~150 MB of DLLs shipped alongside | System or Flatpak-bundled |
+| FFmpeg | ~150 MB of DLLs shipped alongside (9.x) | System 8.x, or Flatpak-bundled |
 | Window chrome | `WindowChrome` + `WM_GETMINMAXINFO` | Extended client area |
 | Monitor geometry | `MonitorFromWindow` | Avalonia `Screens` |
 

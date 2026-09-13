@@ -41,7 +41,7 @@
     <!-- FFmpeg bindings. The native libraries are NOT shipped: on Linux they
          come from the host (or, in the Flatpak, from a bundled LGPL FFmpeg
          built by the manifest). See Services/FFmpegLoader.cs. -->
-    <PackageReference Include="FFmpeg.AutoGen" Version="9.0.1.1" />
+    <PackageReference Include="FFmpeg.AutoGen" Version="8.1.0" />
 
     <!-- SSH -->
     <PackageReference Include="SSH.NET" Version="2026.0.0" />

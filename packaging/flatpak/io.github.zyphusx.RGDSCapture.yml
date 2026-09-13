@@ -6,11 +6,16 @@
 # needs no .NET extension and the sandboxed build stays offline.
 #
 # FFmpeg is built here rather than taken from the runtime. FFmpeg.AutoGen
-# 9.0.1.1 binds specific sonames (libavcodec.so.63, libavutil.so.61,
-# libswscale.so.10, libswresample.so.7), and no freedesktop runtime — nor the
-# ffmpeg-full extension — ships that generation. A mismatch fails to load
-# rather than mis-binding, so pinning it here is what makes the decoder work
-# at all.
+# 8.1.0 binds specific sonames (libavcodec.so.62, libavutil.so.60,
+# libswscale.so.9, libswresample.so.6), and the freedesktop 24.08 runtime —
+# and its ffmpeg-full extension — ship an older generation. A mismatch fails
+# to load rather than mis-binding, so pinning it here is what makes the
+# decoder work at all.
+#
+# The version matches what Nobara ships (8.1.x), so running from source on
+# the host uses the distro's own FFmpeg and gets its security updates through
+# dnf. Inside the Flatpak there is no such luxury: this bundled copy is only
+# as current as the last time you rebuilt.
 
 app-id: io.github.zyphusx.RGDSCapture
 runtime: org.freedesktop.Platform
@@ -68,12 +73,12 @@ modules:
       - --enable-swresample
     sources:
       - type: archive
-        url: https://ffmpeg.org/releases/ffmpeg-9.0.1.tar.xz
+        url: https://ffmpeg.org/releases/ffmpeg-8.1.2.tar.xz
         # UNVERIFIED — fill this in before building. The build environment
         # this manifest was written in could not reach ffmpeg.org, and a
         # made-up checksum is worse than an obvious gap. Get the real one:
-        #     curl -O https://ffmpeg.org/releases/ffmpeg-9.0.1.tar.xz
-        #     sha256sum ffmpeg-9.0.1.tar.xz
+        #     curl -O https://ffmpeg.org/releases/ffmpeg-8.1.2.tar.xz
+        #     sha256sum ffmpeg-8.1.2.tar.xz
         sha256: 0000000000000000000000000000000000000000000000000000000000000000
     cleanup:
       - /include

@@ -1,4 +1,5 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using FFmpeg.AutoGen;
 
 namespace RGDSCapture.Services
@@ -42,19 +43,31 @@ namespace RGDSCapture.Services
             string.Empty
         };
 
-        private static string Architecture => System.Runtime.InteropServices
-            .RuntimeInformation.ProcessArchitecture switch
-        {
-            System.Runtime.InteropServices.Architecture.Arm64 => "aarch64-linux-gnu",
-            _ => "x86_64-linux-gnu"
-        };
+        private static string Architecture =>
+            RuntimeInformation.ProcessArchitecture == System.Runtime.InteropServices.Architecture.Arm64
+                ? "aarch64-linux-gnu"
+                : "x86_64-linux-gnu";
 
         /// <summary>
         /// avcodec's soname major for the FFmpeg generation these bindings
-        /// were generated against. Used only to probe for a usable directory;
-        /// FFmpeg.AutoGen applies the real per-library versions itself.
+        /// were generated against — 62 is FFmpeg 8.x. Used only to probe for
+        /// a usable directory; FFmpeg.AutoGen applies the real per-library
+        /// versions itself.
+        ///
+        /// This tracks the FFmpeg.AutoGen package version and must move with
+        /// it: the two are generated as a pair, and a mismatch fails at
+        /// runtime rather than at compile time.
         /// </summary>
-        private const int AvcodecMajor = 63;
+        private const int AvcodecMajor = 62;
+
+        /// <summary>Human-readable FFmpeg major matching <see cref="AvcodecMajor"/>.</summary>
+        private static string FFmpegGeneration => AvcodecMajor switch
+        {
+            61 => "7.x",
+            62 => "8.x",
+            63 => "9.x",
+            _ => "matching these bindings"
+        };
 
         public static void EnsureRegistered()
         {
@@ -67,12 +80,8 @@ namespace RGDSCapture.Services
                 if (root is null)
                     throw new FileNotFoundException(
                         $"FFmpeg libavcodec.so.{AvcodecMajor} was not found. " +
-                        "Install FFmpeg " + AvcodecMajor switch
-                        {
-                            63 => "9.x",
-                            _ => "matching these bindings"
-                        } +
-                        ", or run the Flatpak build, which bundles it.");
+                        $"Install FFmpeg {FFmpegGeneration}, or run the Flatpak " +
+                        "build, which bundles a matching one.");
 
                 ffmpeg.RootPath = root;
                 _registered = true;
@@ -80,18 +89,26 @@ namespace RGDSCapture.Services
         }
 
         /// <summary>
-        /// True if <paramref name="dir"/> holds a libavcodec of the expected
-        /// generation. The empty path is accepted unconditionally: the loader
-        /// resolves it against ld.so's own search path, which is not
-        /// enumerable from here, so it stands as the last-chance fallback.
+        /// True if <paramref name="dir"/> yields a libavcodec of the expected
+        /// generation.
+        ///
+        /// The empty path means "let the dynamic loader use its own search
+        /// path", which is not enumerable from here — so rather than assume
+        /// it works, ask ld.so to actually resolve the soname. Accepting it
+        /// unconditionally would make this method always succeed, and the
+        /// error below could never fire: a missing FFmpeg would resurface as
+        /// a bare DllNotFoundException from inside the decoder, which is the
+        /// thing this check exists to prevent.
         /// </summary>
         private static bool HasAvcodec(string dir)
         {
-            if (dir.Length == 0) return true;
+            string soname = $"libavcodec.so.{AvcodecMajor}";
 
             try
             {
-                return File.Exists(Path.Combine(dir, $"libavcodec.so.{AvcodecMajor}"));
+                return dir.Length == 0
+                    ? NativeLibrary.TryLoad(soname, out _)
+                    : File.Exists(Path.Combine(dir, soname));
             }
             catch
             {
